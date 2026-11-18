@@ -103,9 +103,18 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
     return { body: await res.json() };
   }
 
-  const leagues = (await get(`${root}/leagues`, "leagues")).body;
-  const league = Array.isArray(leagues) && leagues.find(l => l && l.name === settings.leagueName && l.id);
+  // The league list is conditional too: on a 304 reuse the league found last time.
+  const got = await get(`${root}/leagues`, "leagues");
+  let league = null;
+  if (got.notModified) league = state.league && state.league.name === settings.leagueName ? state.league : null;
+  else league = (Array.isArray(got.body) && got.body.find(l => l && l.name === settings.leagueName && l.id)) || null;
+  if (!league && got.notModified) { // the saved league does not match: ask again without the ETag
+    delete state.etags.leagues;
+    const again = await get(`${root}/leagues`, "leagues");
+    league = (Array.isArray(again.body) && again.body.find(l => l && l.name === settings.leagueName && l.id)) || null;
+  }
   if (!league) throw new Error(`poe.ninja does not list the league "${settings.leagueName}".`);
+  state.league = { id: league.id, name: league.name };
 
   let fresh = 0;
   for (const category of CATEGORIES) {

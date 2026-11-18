@@ -29,6 +29,13 @@
   <section class="xc-card" aria-label="Open positions">
     <h2>Open positions</h2>
     <p class="xc-note">Profit and loss is at today's middle price, then again after paying the exchange spread to sell. Swap ideas assume part of each price gap closes (adjust in Settings) and only list currencies busy enough to take a position your size.</p>
+    <div id="lg-view" class="lg-view" role="group" aria-label="How positions are shown">
+      <button type="button" class="xc-btn" data-view="cards">Cards</button>
+      <button type="button" class="xc-btn" data-view="list">Simple list</button>
+      <span class="lg-view-gap"></span>
+      <button type="button" class="xc-btn" data-all="open">Expand all</button>
+      <button type="button" class="xc-btn" data-all="close">Collapse all</button>
+    </div>
     <div id="positions" class="lg-list"></div>
   </section>
   <section class="xc-card" aria-label="Log a trade">

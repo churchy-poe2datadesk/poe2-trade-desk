@@ -41,3 +41,12 @@
 @media (max-width:760px){.lg-form{grid-template-columns:1fr}.lg-summary,.lg-grid{grid-template-columns:repeat(2,1fr)}}
 
 .lg-hint{margin:2px 0 0;color:var(--muted,#a89f8c);font-size:13px;grid-column:1/-1}
+
+.lg-view{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}.lg-view .xc-btn{padding:5px 12px;font-size:13px}.lg-view .xc-btn.on{border-color:var(--gold);color:var(--paper);background:#2a2418}.lg-view-gap{flex:1}
+details.lg-coll{padding:0}details.lg-coll>summary{display:flex;align-items:baseline;gap:10px;padding:14px 18px;cursor:pointer;list-style:none}
+details.lg-coll>summary::-webkit-details-marker{display:none}
+details.lg-coll>summary::before{content:"\25B8";color:var(--gold);transition:transform .12s}details.lg-coll[open]>summary::before{transform:rotate(90deg)}
+.lg-sum-t{font:600 16px Arial,sans-serif;color:var(--paper)}.lg-sum-m{color:var(--muted);font-size:12px;flex:1}.lg-sum-r{font-variant-numeric:tabular-nums;font-size:15px}
+details.lg-coll>.lg-body{padding:0 18px 16px}
+details.lg-compact>summary{padding:8px 14px}details.lg-compact .lg-sum-t{font-size:14px}
+.lg-list:has(.lg-compact){gap:6px}

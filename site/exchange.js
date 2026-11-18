@@ -145,7 +145,8 @@ if (typeof document !== "undefined") {
     $("xc-exact").textContent = `Exact whole-number pairs on this ratio come in steps of ${fmt(frac(pair.left))} ${ln} : ${fmt(frac(pair.right))} ${rn}.`;
     if (state.left && state.right) {
       const market = state.left.divine / state.right.divine;
-      const mine = Number(ratio.n) / Number(ratio.d);
+      const typed = freeEntry() ? typedRatio() : null;
+      const mine = typed || Number(ratio.n) / Number(ratio.d);
       const diff = (mine / market - 1) * 100;
       const el = $("xc-market-text"), box = $("xc-market");
       const tier = diff >= 2 ? "good" : diff <= -2 ? "bad" : "fair";
@@ -164,6 +165,15 @@ if (typeof document !== "undefined") {
     }
   }
 
+  // "Type both amounts myself": typing in one box leaves the other alone. The ratio, margin and market comparison then
+  // follow the two typed amounts. (The ratio box, margin box and the whole-number buttons still fill in the amounts.)
+  const FREE_KEY = "poe2dd.freeEntry";
+  const freeEntry = () => $("free-entry").checked;
+  const typedRatio = () => {
+    const l = readQty("left-qty"), r = readQty("right-qty");
+    if (!l || !r || l.n <= 0n || r.n <= 0n) return null;
+    return Number(r.n) / Number(r.d) / (Number(l.n) / Number(l.d));
+  };
   function fromLeft() { const l = readQty("left-qty"), r = readRatio(); if (l && r) $("right-qty").value = plain(mul(l, r)); summary(); }
   function fromRight() { const rt = readQty("right-qty"), r = readRatio(); if (rt && r) $("left-qty").value = plain(div(rt, r)); summary(); }
   function onRatio() { showResult("", ""); fromLeft(); }
@@ -516,8 +526,10 @@ if (typeof document !== "undefined") {
     if (!settingsState) return;
     window.ToolsUI.openSettings(settingsState, values => { if (window.Ledger) window.Ledger.applySettings(settingsState, values); opts = MM.optionsFrom(values); state.items.forEach(i => { delete i._spike; }); renderIdeas(); });
   });
-  $("left-qty").addEventListener("input", fromLeft);
-  $("right-qty").addEventListener("input", fromRight);
+  try { $("free-entry").checked = localStorage.getItem(FREE_KEY) !== "0"; } catch { /* default: on */ }
+  $("free-entry").addEventListener("change", () => { try { localStorage.setItem(FREE_KEY, $("free-entry").checked ? "1" : "0"); } catch { /* kept for this page */ } summary(); });
+  $("left-qty").addEventListener("input", () => (freeEntry() ? summary() : fromLeft()));
+  $("right-qty").addEventListener("input", () => (freeEntry() ? summary() : fromRight()));
   $("ratio").addEventListener("input", onRatio);
   $("swap").addEventListener("click", doSwap);
   $("raise-left").addEventListener("click", () => doRaise("left"));

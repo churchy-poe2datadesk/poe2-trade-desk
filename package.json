@@ -1,0 +1,1 @@
+{ "name": "poe2-trade-desk-public", "private": true, "version": "1.0.0", "scripts": { "test": "node tests/capture.test.js", "capture": "node scripts/capture.js --out data" }, "engines": { "node": ">=20" } }

@@ -149,4 +149,6 @@ h3{font:600 12px Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;
 .xc-live.bad{color:#f08a7e;border-color:#c85a4e;background:#c85a4e14}
 .xc-live.fair{color:var(--warn);border-color:var(--warn);background:#e0a85a14}
 
+.xc-modewrap{display:inline-flex;align-items:center;gap:8px}.xc-modepick{width:auto;padding:5px 8px}.xc-modetag{padding:2px 10px;border-radius:999px;font:700 11px Arial,sans-serif;letter-spacing:.06em;border:1px solid}.xc-mode-sc{color:#7fd48a;border-color:#2f6b3a;background:#12231a}.xc-mode-hc{color:#ff7b72;border-color:#7d2b27;background:#2a1311}
+
 .pt-footer{margin:32px 0 8px;padding-top:14px;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}

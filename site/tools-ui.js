@@ -21,7 +21,13 @@
       host.append(a);
     }
     if (/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) host.append(el("a", { href: "http://127.0.0.1:3212/", class: "xc-navlink" }, document.createTextNode("Dashboard")));
-    if (window.REPORTS_URL) host.prepend(el("a", { href: window.REPORTS_URL, class: "xc-navlink" }, document.createTextNode("← Reports")));
+    // Softcore / hardcore switch. The coloured tag shows which one the prices below are for (green softcore, red hardcore).
+    const mode = MM.getMode();
+    const pick = el("select", { class: "xc-input xc-modepick", "aria-label": "Softcore or hardcore market" });
+    for (const [value, label] of [["sc", "Softcore"], ["hc", "Hardcore"]]) { const o = el("option", { value }, document.createTextNode(label)); if (value === mode) o.selected = true; pick.append(o); }
+    pick.addEventListener("change", () => { MM.setMode(pick.value); const u = new URL(location.href); u.searchParams.delete("mode"); location.href = u.toString(); });
+    host.append(el("span", { class: "xc-modewrap" }, pick, el("span", { class: "xc-modetag xc-mode-" + mode }, document.createTextNode(mode === "hc" ? "HARDCORE" : "SOFTCORE"))));
+    if (window.REPORTS_URL) host.prepend(el("a", { href: window.REPORTS_URL, class: "xc-navlink" }, document.createTextNode("← Home")));
     const gear = el("button", { id: "open-settings", type: "button", class: "xc-btn xc-navbtn" }, document.createTextNode("⚙ Settings"));
     host.append(gear);
   }

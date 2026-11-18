@@ -323,16 +323,26 @@
 
   // ---------- browser helpers (data + settings), harmless under Node ----------
   const LOCAL_KEY = "poe2dd.tools.v1";
+  // Softcore ("sc") or hardcore ("hc"): chosen with the drop-down at the top of the tools; kept in this browser.
+  function getMode() {
+    try {
+      const q = new URLSearchParams(location.search).get("mode");
+      if (q === "hc" || q === "sc") return q;
+      return localStorage.getItem("poe2dd.mode") === "hc" ? "hc" : "sc";
+    } catch { return "sc"; }
+  }
+  function setMode(mode) { try { localStorage.setItem("poe2dd.mode", mode === "hc" ? "hc" : "sc"); } catch { /* kept for this page only */ } }
   async function loadMarket() {
-    for (const url of [window.MARKET_URL || "market.json"]) {
+    const hc = getMode() === "hc";
+    for (const url of [hc ? (window.MARKET_URL_HC || "market-hc.json") : (window.MARKET_URL || "market.json")]) {
       try {
         const r = await fetch(url, { cache: "no-store" });
         if (!r.ok) continue;
         const j = await r.json();
-        if (j && Array.isArray(j.items) && j.items.length) return { ...j, source: url === "market.json" ? "snapshot" : "live" };
+        if (j && Array.isArray(j.items) && j.items.length) return { ...j, mode: hc ? "hc" : "sc", source: /market(-hc)?\.json$/.test(url) ? "snapshot" : "live" };
       } catch { /* try the next source */ }
     }
-    throw new Error("No market data is available.");
+    throw new Error(hc ? "No hardcore market data is available yet. Switch back to softcore, or try again after the next capture." : "No market data is available.");
   }
   async function loadSettings() {
     try {
@@ -355,6 +365,6 @@
 
   return {
     TOOL_SETTINGS, DEFAULT_OPTIONS, optionsFrom, median, theilSen, spikeFlags, weekPoints, fairValue, usualPrice, spikeOf, edgeOf,
-    liquidPool, looseVolume, barVolume, tierOf, BARS, liquidityScore, roundTripCost, sigmaOf, scoreOf, byKey, valuePosition, swapOptions, alertsFor, loadMarket, loadSettings, saveSettings
+    liquidPool, looseVolume, barVolume, tierOf, BARS, liquidityScore, roundTripCost, sigmaOf, scoreOf, byKey, valuePosition, swapOptions, alertsFor, loadMarket, getMode, setMode, loadSettings, saveSettings
   };
 });

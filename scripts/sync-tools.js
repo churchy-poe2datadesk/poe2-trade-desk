@@ -21,7 +21,7 @@ const read = f => fs.readFileSync(path.join(src, f), "utf8");
 const write = (f, t) => fs.writeFileSync(path.join(out, f), t);
 
 write("market-model.js", patch(read("market-model.js"), "market-model.js", [
-  ['for (const url of ["/exchange/currencies", "market.json"]) {', 'for (const url of [window.MARKET_URL || "market.json"]) {'],
+  ['hc ? ["/exchange/currencies?mode=hc", "market-hc.json"] : ["/exchange/currencies", "market.json"]', '[hc ? (window.MARKET_URL_HC || "market-hc.json") : (window.MARKET_URL || "market.json")]'],
   ['const r = await fetch("/settings", { cache: "no-store" });', 'const r = await Promise.reject(new Error("static site"));']
 ]));
 for (const f of ["exchange.js", "ledger.js"]) {
@@ -34,7 +34,7 @@ for (const f of ["exchange.js", "ledger.js"]) {
 write("tools-ui.js", patch(read("tools-ui.js"), "tools-ui.js", [
   ['const links = [["/exchange", "Trade Desk", "exchange"]];', 'const links = [["/tradedesk", "Trade Desk", "exchange"]];'],
   ['if (location.protocol === "file:") a.setAttribute("href", "exchange.html");', 'if (location.protocol === "file:") a.setAttribute("href", "tradedesk.html");'],
-  ['const gear = el("button"', 'if (window.REPORTS_URL) host.prepend(el("a", { href: window.REPORTS_URL, class: "xc-navlink" }, document.createTextNode("\u2190 Reports")));\n    const gear = el("button"']
+  ['const gear = el("button"', 'if (window.REPORTS_URL) host.prepend(el("a", { href: window.REPORTS_URL, class: "xc-navlink" }, document.createTextNode("\u2190 Home")));\n    const gear = el("button"']
 ]));
 write("exchange.css", read("exchange.css") + "\n.pt-footer{margin:32px 0 8px;padding-top:14px;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}\n");
 write("ledger.css", read("ledger.css"));

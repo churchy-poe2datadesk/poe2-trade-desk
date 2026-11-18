@@ -17,7 +17,7 @@ const fakeFetch = async (url, opts) => {
   calls.push({ url: String(url), headers: opts.headers });
   const json = body => ({ ok: true, status: 200, headers: { get: h => (h.toLowerCase() === "etag" ? `"e${etagN++}"` : null) }, json: async () => body });
   if (String(url).endsWith("/leagues") && notModified && opts.headers["If-None-Match"]) return { ok: false, status: 304, headers: { get: () => null } };
-  if (String(url).endsWith("/leagues")) return json([{ id: "L1", name: "Forbidden Rites" }, { id: "L2", name: "Other" }]);
+  if (String(url).endsWith("/leagues")) return json([{ id: "L1", name: "Forbidden Rites" }, { id: "L2", name: "Other" }, { id: "L3", name: "HC Forbidden Rites" }]);
   const type = new URL(url).searchParams.get("type");
   if (type === failCategory) return { ok: false, status: 500, headers: { get: () => null }, json: async () => ({}) };
   if (notModified && opts.headers["If-None-Match"]) return { ok: false, status: 304, headers: { get: () => null } };
@@ -106,5 +106,15 @@ const fakeFetch = async (url, opts) => {
   assert.ok(/\/exchange \/tradedesk 301/.test(read("_redirects")), "old address redirects");
   assert.ok(!/["'\/]exchange\?/.test(read("exchange.js") + read("ledger.js")), "links use /tradedesk");
   assert.ok(read("tools-ui.js").includes("REPORTS_URL") && read("config.js").includes("REPORTS_URL"), "Reports link configured");
+  // Hardcore: its own files, its own league, softcore untouched.
+  {
+    const hcOut = fs.mkdtempSync(path.join(os.tmpdir(), "pt-hc-"));
+    const sc = await run({ outDir: hcOut, settings, fetchImpl: fakeFetch, now: () => Date.UTC(2026, 10, 18, 0), delayMs: 0 });
+    const hc = await run({ outDir: hcOut, settings, fetchImpl: fakeFetch, now: () => Date.UTC(2026, 10, 18, 0), delayMs: 0, mode: "hc" });
+    const m = f => JSON.parse(fs.readFileSync(path.join(hcOut, f), "utf8"));
+    assert.equal(m("market.json").league, "Forbidden Rites"); assert.equal(m("market-hc.json").league, "HC Forbidden Rites"); assert.equal(m("market-hc.json").mode, "hc");
+    assert.ok(fs.existsSync(path.join(hcOut, "history-hc.json")) && fs.existsSync(path.join(hcOut, "state-hc.json")) && hc.items === sc.items);
+    await assert.rejects(run({ outDir: hcOut, settings: { ...settings, hardcoreLeagueName: "HC Missing" }, fetchImpl: fakeFetch, delayMs: 0, mode: "hc" }), /does not list the league "HC Missing"/);
+  }
   console.log("public-tools capture: all checks passed");
 })().catch(e => { console.error(e); process.exit(1); });

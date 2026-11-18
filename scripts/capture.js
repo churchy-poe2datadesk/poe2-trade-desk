@@ -86,12 +86,15 @@ async function syncIcons({ outDir, state, fetchImpl, t, delayMs, ua }) {
   return known; // id -> file name
 }
 
-async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now(), delayMs = 1500 }) {
+// mode "sc" (softcore, market.json) or "hc" (hardcore, market-hc.json): the same capture into its own files.
+async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now(), delayMs = 1500, mode = "sc" }) {
+  const sfx = mode === "hc" ? "-hc" : "";
+  const wanted = mode === "hc" ? (settings.hardcoreLeagueName || `HC ${settings.leagueName}`) : settings.leagueName;
   const root = settings.apiRoot, ua = `PoE2-Data-Desk-Public-Tools/1.0 (hourly economy snapshot; contact: ${settings.contact})`;
-  const state = await readJson(path.join(outDir, "state.json"), { etags: {}, categories: {} });
+  const state = await readJson(path.join(outDir, `state${sfx}.json`), { etags: {}, categories: {} });
   // Saved data from an older version lacks fields this version needs (icons): forget the ETags once so every category is fetched again.
   if (state.schema !== 2) { state.etags = {}; state.schema = 2; }
-  const history = await readJson(path.join(outDir, "history.json"), {});
+  const history = await readJson(path.join(outDir, `history${sfx}.json`), {});
   const t = now(), failures = [];
 
   async function get(url, key) {
@@ -113,14 +116,14 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
   // The league list is conditional too: on a 304 reuse the league found last time.
   const got = await get(`${root}/leagues`, "leagues");
   let league = null;
-  if (got.notModified) league = state.league && state.league.name === settings.leagueName ? state.league : null;
-  else league = (Array.isArray(got.body) && got.body.find(l => l && l.name === settings.leagueName && l.id)) || null;
+  if (got.notModified) league = state.league && state.league.name === wanted ? state.league : null;
+  else league = (Array.isArray(got.body) && got.body.find(l => l && l.name === wanted && l.id)) || null;
   if (!league && got.notModified) { // the saved league does not match: ask again without the ETag
     delete state.etags.leagues;
     const again = await get(`${root}/leagues`, "leagues");
-    league = (Array.isArray(again.body) && again.body.find(l => l && l.name === settings.leagueName && l.id)) || null;
+    league = (Array.isArray(again.body) && again.body.find(l => l && l.name === wanted && l.id)) || null;
   }
-  if (!league) throw new Error(`poe.ninja does not list the league "${settings.leagueName}".`);
+  if (!league) throw new Error(`poe.ninja does not list the league "${wanted}".`);
   // A new league starts clean: another league's prices must never feed this league's history or statistics.
   if (state.league && state.league.name !== league.name) {
     state.categories = {}; state.etags = { leagues: state.etags.leagues }; state.iconFail = {};
@@ -185,9 +188,9 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
   if (!items.length) throw new Error(`No market data captured (${failures.join("; ") || "nothing returned"}).`);
   if (!items.some(i => i.key === "Currency:divine")) items.push({ key: "Currency:divine", name: "Divine Orb", category: "Currency", divine: 1, activity: 0 });
 
-  await writeJson(path.join(outDir, "market.json"), { ok: true, capturedAt: latest, league: league.name, items });
-  await writeJson(path.join(outDir, "history.json"), history);
-  await writeJson(path.join(outDir, "state.json"), state);
+  await writeJson(path.join(outDir, `market${sfx}.json`), { ok: true, capturedAt: latest, league: league.name, mode, items });
+  await writeJson(path.join(outDir, `history${sfx}.json`), history);
+  await writeJson(path.join(outDir, `state${sfx}.json`), state);
   return { items: items.length, fresh, failures };
 }
 
@@ -201,5 +204,13 @@ if (require.main === module) {
     const result = await run({ outDir: path.resolve(out), settings });
     console.log(`Captured ${result.items} entries (${result.fresh} categories updated).`);
     if (result.failures.length) console.warn("Some categories failed and kept their previous data:", result.failures.join("; "));
+    // Hardcore is a second, separate capture. A problem here never fails the softcore data above.
+    if (settings.hardcore !== false) {
+      try {
+        const hc = await run({ outDir: path.resolve(out), settings, mode: "hc" });
+        console.log(`Hardcore: captured ${hc.items} entries (${hc.fresh} categories updated).`);
+        if (hc.failures.length) console.warn("Hardcore: some categories failed and kept their previous data:", hc.failures.join("; "));
+      } catch (error) { console.warn("Hardcore capture skipped:", error.message); }
+    }
   })().catch(error => { console.error("Capture failed:", error.message); process.exit(1); });
 }

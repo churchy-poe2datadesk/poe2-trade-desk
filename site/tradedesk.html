@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://*.github.io; connect-src 'self' https://*.github.io; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trade Desk · PoE2 Data Desk</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230f1012'/%3E%3Ccircle cx='32' cy='32' r='27' fill='none' stroke='%23a88b60' stroke-width='4'/%3E%3Cpath d='M17 26h26l-7-7M47 38H21l7 7' fill='none' stroke='%23ecdcb4' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/exchange.css">
+<link rel="stylesheet" href="/ledger.css">
+</head>
+<body>
+<main class="xc">
+  <nav id="tools-nav" class="xc-nav" aria-label="Tools"></nav>
+  <header class="xc-head">
+    <div class="xc-kicker">PoE2 DATA DESK</div>
+    <h1>Trade Desk</h1>
+    <p id="xc-meta" class="xc-meta">Loading currencies…</p>
+    <button id="bell" class="xc-btn lg-bell" type="button" aria-label="Open alerts">🔔 Alerts <span id="bell-count" class="lg-count">0</span></button>
+  </header>
+
+  <div class="xc-cols">
+  <div class="xc-col" id="col-ledger" aria-label="Trade Ledger">
+    <h2 class="xc-col-h">Trade Ledger</h2>
+    <p id="lg-meta" class="xc-meta xc-col-meta"></p>
+  <section class="xc-card" aria-label="Summary">
+    <div id="lg-summary" class="lg-summary"></div>
+  </section>
+  <section class="xc-card" aria-label="Open positions">
+    <h2>Open positions</h2>
+    <p class="xc-note">Profit and loss is at today's middle price, then again after paying the exchange spread to sell. Swap ideas assume part of each price gap closes (adjust in Settings) and only list currencies busy enough to take a position your size.</p>
+    <div id="positions" class="lg-list"></div>
+  </section>
+  <section class="xc-card" aria-label="Log a trade">
+    <details class="lg-manual"><summary>Log a trade by hand</summary>
+    <p class="xc-note">Already made the trade in game? Enter it here. (Or fill in the calculator on the right and press Add to ledger.)</p>
+    <form id="trade-form" class="lg-form" autocomplete="off">
+      <label class="lg-field"><span class="xc-label">You gave</span>
+        <input id="give-name" class="xc-input lg-text" list="item-names" placeholder="e.g. Divine Orb" required>
+        <input id="give-qty" class="xc-input" inputmode="decimal" placeholder="Amount" required></label>
+      <label class="lg-field"><span class="xc-label">You got</span>
+        <input id="get-name" class="xc-input lg-text" list="item-names" placeholder="e.g. Chaos Orb" required>
+        <input id="get-qty" class="xc-input" inputmode="decimal" placeholder="Amount" required></label>
+      <label class="lg-field lg-narrow"><span class="xc-label">Ratio (1 given = ? got)</span>
+        <input id="trade-ratio" class="xc-input" inputmode="decimal" placeholder="e.g. 1.564"></label>
+      <label class="lg-field lg-narrow"><span class="xc-label">When</span>
+        <input id="trade-when" class="xc-input lg-small" type="datetime-local"></label>
+      <label class="lg-field lg-wide"><span class="xc-label">Note (optional)</span>
+        <input id="trade-note" class="xc-input lg-text" maxlength="120" placeholder="Why you made the trade"></label>
+      <p id="market-hint" class="lg-hint lg-wide" aria-live="polite">Pick both currencies to see the market ratio.</p>
+      <datalist id="item-names"></datalist>
+      <div class="xc-actions"><button class="xc-btn xc-primary" type="submit">Add trade</button><span id="form-msg" class="xc-set-msg"></span></div>
+    </form>
+  </details>
+  </section>
+  <section class="xc-card" aria-label="Closed trades">
+    <h2>Closed positions</h2>
+    <div id="closed" class="lg-list"></div>
+  </section>
+  <section class="xc-card" aria-label="Your data">
+    <h2>Your data</h2>
+    <p class="xc-note">Trades are stored in this browser only. Export a backup, move them to another computer with Import, or remove them here.</p>
+    <div class="xc-actions">
+      <button id="export" class="xc-btn" type="button">Export backup</button>
+      <label class="xc-btn lg-file">Import backup<input id="import" type="file" accept="application/json,.json"></label>
+      <button id="clear-closed" class="xc-btn" type="button">Clear closed</button>
+      <button id="clear-all" class="xc-btn lg-danger" type="button">Clear everything</button>
+    </div>
+    <p id="data-msg" class="xc-set-msg"></p>
+  </section>
+  <section class="xc-card lg-advice" aria-label="Trading playbook">
+    <h2>Trading playbook</h2>
+    <p class="xc-note">General habits for growing your wealth by trading. They are guides from how markets like this tend to behave, not promises. Open any tip.</p>
+    <details open><summary>Count everything in Divine</summary><p>Judge every trade by whether you hold more Divine afterwards, not more of some currency. A trade that gives you more Chaos but less Divine value is a loss. The ledger values everything in Divine for this reason.</p></details>
+    <details><summary>Buy below usual, sell above usual</summary><p>The lists on the right compare today's price with the item's usual level. Buying well under it and selling well over it is the whole edge. If an item is only slightly off its usual price, the gap is probably smaller than the cost of trading, so skip it.</p></details>
+    <details><summary>Always beat the spread</summary><p>You buy at the asking price and sell at the lower bidding price, so every round trip starts a few percent down. Only trade when the expected move is clearly bigger than that. Net profit in the lists already subtracts it.</p></details>
+    <details><summary>Only trade what you can sell</summary><p>A profit on paper means nothing if nobody is buying. Prefer busy items, and keep a position to a small share of what trades in a day, so you can leave without moving the price against yourself. Quiet items are thinner bets, so size them smaller (the LOOSER PICK tag marks them).</p></details>
+    <details><summary>Do not chase spikes, and be careful with dips</summary><p>A sudden jump is more often a one-off than a new level, so it is a chance to sell, not buy. A sudden drop can be a bargain or the market reacting to something real, such as a patch or a nerf. Check the News tab before buying a dip.</p></details>
+    <details><summary>Know your exit before you enter</summary><p>Decide what price you will sell at, and what price makes you admit you were wrong. Close the position when the price returns to its usual level; waiting for more is how gains turn back into losses.</p></details>
+    <details><summary>Spread your bets</summary><p>Prices move for reasons no chart shows. Keep any one position to a modest part of your total, and avoid putting everything into a single item or a single idea.</p></details>
+    <details><summary>Early league versus late league</summary><p>Early on, prices swing hard and fast as supply arrives, which means bigger chances and bigger mistakes. Later they settle and gaps shrink, so wealth comes more from steady, repeated small wins and from holding things that keep their value.</p></details>
+    <details><summary>Small wins add up</summary><p>Flips usually earn a few percent each. Wealth comes from doing it repeatedly, reinvesting the proceeds, and never taking a big loss that wipes out many small wins. Log every trade so you can see what actually worked.</p></details>
+  </section>
+  </div>
+  <div class="xc-col" id="col-calc" aria-label="Exchange Calculator">
+    <h2 class="xc-col-h">Exchange Calculator</h2>
+  <section class="xc-card" aria-label="Exchange">
+    <div class="xc-row">
+      <div class="xc-side">
+        <label class="xc-label" for="left-qty">You give</label>
+        <div class="combo" id="combo-left"></div>
+        <input id="left-qty" class="xc-input" inputmode="decimal" autocomplete="off" value="1" aria-label="Amount you give">
+      </div>
+
+      <div class="xc-mid">
+        <label class="xc-label" for="ratio">Ratio</label>
+        <div class="xc-ratio-line"><span class="xc-one">1</span><span class="xc-eq">=</span>
+          <input id="ratio" class="xc-input xc-ratio" inputmode="decimal" autocomplete="off" value="1.564" aria-label="Ratio: how many of the right currency for 1 of the left"></div>
+        <button id="swap" class="xc-btn xc-swap" type="button" title="Swap sides (ratio is inverted)">⇄ Swap</button>
+      </div>
+
+      <div class="xc-side">
+        <label class="xc-label" for="right-qty">You get</label>
+        <div class="combo" id="combo-right"></div>
+        <input id="right-qty" class="xc-input" inputmode="decimal" autocomplete="off" value="1.564" aria-label="Amount you get">
+      </div>
+    </div>
+
+    <p id="xc-line" class="xc-line"></p>
+    <div id="xc-market" class="xc-market"><span id="xc-market-text"></span> <button id="use-market" class="xc-link" type="button">Use market ratio</button></div>
+    <div class="xc-margin">
+      <label id="live-margin" class="xc-live fair" title="Your actual amounts against the market ratio, before the buy/sell gap. It updates as you change currencies, ratio or amounts. Type a margin to set the ratio from it."><span id="live-word">Margin</span> <input id="margin" class="xc-input xc-small" inputmode="decimal" autocomplete="off" value="0.00" aria-label="Profit margin percent: updates automatically, or type one to set the ratio"> %</label>
+      <button id="add-ledger" class="xc-btn xc-primary" type="button" title="Log this trade in your Trade Ledger">＋ Add to ledger</button>
+      <span id="add-msg" class="xc-set-msg" aria-live="polite"></span>
+      <span class="xc-look">Updates as you type. Enter a margin to set the ratio. The ranked lists use the minimum net profit in Settings.</span>
+    </div>
+  </section>
+
+  <section class="xc-card" aria-label="Whole numbers">
+    <h2>Make the amounts whole</h2>
+    <p class="xc-note">The in-game exchange only takes whole numbers. These buttons raise one side to the next whole number where the other side lands exactly on the ratio, or as close to it as possible.</p>
+    <div class="xc-actions">
+      <button id="raise-left" class="xc-btn xc-primary" type="button">Raise left to whole</button>
+      <button id="raise-right" class="xc-btn xc-primary" type="button">Raise right to whole</button>
+      <button id="exact-pair" class="xc-btn" type="button">Smallest exact pair</button>
+      <label class="xc-look">Look ahead <input id="lookahead" class="xc-input xc-small" inputmode="numeric" value="100" aria-label="How many whole numbers to search ahead"> steps</label>
+    </div>
+    <div id="xc-result" class="xc-result" aria-live="polite"></div>
+    <p id="xc-exact" class="xc-exact"></p>
+  </section>
+
+  <section class="xc-card" aria-label="Buy low, sell high">
+    <h2>Buy low, sell high</h2>
+    <p id="flip-note" class="xc-note">Busy items priced away from their usual level, using every capture stored for the last 30 days. Click any item to see how it swings, then load it into the calculator. Search filters the lists.</p>
+
+    <details class="xc-about">
+      <summary>How this works: usual price, net profit, swings and the score</summary>
+      <div class="xc-about-body">
+        <p><strong>Usual price.</strong> From an item's own daily captures once it has 5 or more days: a robust trend line if it has been clearly trending, otherwise the median of its last 7 days. With less history it falls back to the median of poe.ninja's own 7-day shape, but only if that week moved less than 15%, because a bigger move is a trend and not a bargain. Medians mean one-off spikes barely move it.</p>
+        <p><strong>Net profit.</strong> The gap to the usual price, multiplied by how much of a gap usually closes, minus the estimated gap between buying and selling prices (the game charges no fee, but you buy at the asking price and sell at the lower bidding price). Prices rarely return all the way, so only part of the gap counts (20% until an item has 10 days of its own history to measure it from). That gap is the estimate you set in Settings for busy markets, doubled at 100 to 1000 Divine a day and quadrupled below that.</p>
+        <p><strong>What gets listed.</strong> Items trading at least 100 Divine a day (never the Divine Orb itself), whose gap is at least twice their normal change between updates, whose price is not more than double or half the usual, and whose net profit beats your minimum. If nothing qualifies the page says why. An empty list is an honest answer, not a fault.</p>
+        <p><strong>Swings.</strong> Measured on prices with the overall trend taken out, so a steady climb is reported as a trend and not as swings. A swing is a move of at least 5% (or three times the item's normal wobble, if larger). <em>Early</em> is under 3 days of captures, <em>Developing</em> is 3 to 7 days, and <em>Regular swinger</em> needs a week or more with at least 6 swings of consistent size, repeating every 12 hours to 7 days. Every capture you take sharpens this, so over a league the regular swingers stand out.</p>
+        <p><strong>Spikes.</strong> A price at least 35% from its median (and well outside its normal wobble) is flagged as a one-off. A buy at a one-off dip or a sell into a spike loses score, since it may not last.</p>
+        <p><strong>Score</strong> (0 to 100): 45% net profit, 25% swing regularity, 20% liquidity (log scale from 100 to 10,000 Divine a day), 10% confidence, then cut to half when the price is still moving against you and to 60% if today's gap is an unconfirmed jump. <strong>Confidence</strong> is High with 14+ days, 100+ updates and 1000+ Divine a day, Medium with 7+ days, 48+ updates and 100+ Divine, and Low otherwise (always Low on poe.ninja's shape alone).</p>
+        <p>These are guides from past prices, not predictions, and the buy/sell gap is an assumption. Prices change for real reasons such as patches, so check the News tab too.</p>
+      </div>
+    </details>
+
+    <div class="xc-search"><input id="flip-search" class="xc-input" type="search" autocomplete="off" placeholder="Search any currency or item (e.g. Divine, Chaos, Vaal)…" aria-label="Search the lists"></div>
+    <div id="flip-search-msg" class="xc-search-msg" aria-live="polite"></div>
+    <p id="flip-diag" class="xc-note"></p>
+
+
+    <h3 class="xc-top-h">Ranked ideas</h3>
+    <p class="xc-note">Best first. The list is split into bands, and the bar to get in gets lower as you go down: <strong>Strongest</strong> items meet the full bar, <strong>Solid</strong> a slightly lower one, and <strong>Speculative</strong> the lowest. Each band says exactly what it needs. The <em>gap</em> is how far today's price is from the item's usual price, and a <em>normal swing</em> is how much that item's price typically moves from one update to the next, so a gap of 2 swings is an unusually big move for that item. Inside a band, items are ordered by score. Lower bands are thinner bets, so size them smaller.</p>
+    <div class="xc-ideas">
+      <div><h3 class="xc-up">Buy low</h3><ul id="flip-buy" class="xc-idea-list xc-scroll"></ul></div>
+      <div><h3 class="xc-down">Sell high</h3><ul id="flip-sell" class="xc-idea-list xc-scroll"></ul></div>
+    </div>
+  </section>
+  </div>
+  </div>
+  <footer class="pt-footer"><p>Prices come from <a href="https://poe.ninja" target="_blank" rel="noopener noreferrer">poe.ninja</a> (economy overview data, refreshed hourly). This site is not affiliated with or endorsed by poe.ninja or Grinding Gear Games. Estimates only; not financial advice. Your ledger is saved in this browser only.</p></footer>
+</main>
+<div id="xc-modal" class="xc-modal" hidden>
+  <div class="xc-modal-card" role="dialog" aria-modal="true" aria-label="Swing profile">
+    <button id="xc-modal-x" class="xc-modal-x" type="button" aria-label="Close">×</button>
+    <div id="flip-detail" class="xc-detail on"></div>
+  </div>
+</div>
+<script src="/config.js"></script>
+<script src="/market-model.js"></script>
+<script src="/tools-ui.js"></script>
+<div id="lg-modal" class="xc-modal" hidden>
+  <div class="xc-modal-card" role="dialog" aria-modal="true" aria-label="Details">
+    <button id="lg-modal-x" class="xc-modal-x" type="button" aria-label="Close">×</button>
+    <div id="lg-modal-body" class="xc-detail on"></div>
+  </div>
+</div>
+<div id="toasts" class="lg-toasts" aria-live="polite"></div>
+<script src="/ledger.js"></script>
+<script src="/exchange.js"></script>
+</body>
+</html>

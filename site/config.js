@@ -3,3 +3,5 @@
 window.MARKET_URL = "https://churchy-poe2datadesk.github.io/poe2-trade-desk/market.json";
 // Icons are published beside the data file; item icons are loaded from here.
 window.XC_BACKEND = "https://churchy-poe2datadesk.github.io/poe2-trade-desk";
+// The reports website; the Trade Desk top bar links back to it.
+window.REPORTS_URL = "https://poe2-data-desk-pages.pages.dev/reports";

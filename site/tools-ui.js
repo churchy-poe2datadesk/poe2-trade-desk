@@ -14,13 +14,14 @@
   function mountNav(current) {
     const host = document.getElementById("tools-nav");
     if (!host) return;
-    const links = [["/exchange", "Trade Desk", "exchange"]];
+    const links = [["/tradedesk", "Trade Desk", "exchange"]];
     for (const [href, label, id] of links) {
       const a = el("a", { href, class: "xc-navlink" + (id === current ? " on" : "") }, document.createTextNode(label));
-      if (location.protocol === "file:") a.setAttribute("href", "exchange.html");
+      if (location.protocol === "file:") a.setAttribute("href", "tradedesk.html");
       host.append(a);
     }
     if (/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) host.append(el("a", { href: "http://127.0.0.1:3212/", class: "xc-navlink" }, document.createTextNode("Dashboard")));
+    if (window.REPORTS_URL) host.prepend(el("a", { href: window.REPORTS_URL, class: "xc-navlink" }, document.createTextNode("← Reports")));
     const gear = el("button", { id: "open-settings", type: "button", class: "xc-btn xc-navbtn" }, document.createTextNode("⚙ Settings"));
     host.append(gear);
   }

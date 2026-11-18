@@ -116,7 +116,7 @@
   // ---------- rendering ----------
   function calcLink(left, right) {
     const ratio = left.divine / right.divine;
-    return `/exchange?left=${encodeURIComponent(left.key)}&right=${encodeURIComponent(right.key)}&ratio=${encodeURIComponent(Number(ratio.toPrecision(5)))}`;
+    return `/tradedesk?left=${encodeURIComponent(left.key)}&right=${encodeURIComponent(right.key)}&ratio=${encodeURIComponent(Number(ratio.toPrecision(5)))}`;
   }
 
   function positionCard(trade) {

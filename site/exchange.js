@@ -538,7 +538,7 @@ if (typeof document !== "undefined") {
   }
   // Links from the ledger ("Open in calculator") act on this page instead of leaving it.
   document.addEventListener("click", e => {
-    const a = e.target.closest && e.target.closest("a[href^='/exchange?']");
+    const a = e.target.closest && e.target.closest("a[href^='/tradedesk?']");
     if (!a) return;
     e.preventDefault();
     const q = new URL(a.href).searchParams;

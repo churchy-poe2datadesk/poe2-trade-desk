@@ -42,7 +42,7 @@ function lineSummary(data) {
 // Each icon is downloaded once (a few new ones per run at most), from the same hosts poe.ninja uses, and published
 // beside the data so visitors load them from our own address, never from poe.ninja or Grinding Gear Games.
 const ICON_HOSTS = ["https://web.poecdn.com", "https://poe.ninja"];
-const MAX_ICON_BYTES = 250 * 1024, MAX_NEW_ICONS = 120, RETRY_FAILED_MS = 6 * 3600 * 1000;
+const MAX_JSON_BYTES = 40 * 1024 * 1024, MAX_ICON_BYTES = 250 * 1024, MAX_NEW_ICONS = 120, RETRY_FAILED_MS = 6 * 3600 * 1000;
 const iconUrls = src => {
   if (typeof src !== "string" || !src) return [];
   if (src.startsWith("/gen/image/")) return ICON_HOSTS.map(h => h + src);
@@ -102,7 +102,12 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const etag = res.headers.get("etag");
     if (etag) state.etags[key] = etag;
-    return { body: await res.json() };
+    const len = Number(res.headers.get("content-length") || 0);
+    if (len > MAX_JSON_BYTES) throw new Error("response too large");
+    if (typeof res.text !== "function") return { body: await res.json() };
+    const text = await res.text();
+    if (text.length > MAX_JSON_BYTES) throw new Error("response too large");
+    return { body: JSON.parse(text) };
   }
 
   // The league list is conditional too: on a 304 reuse the league found last time.
@@ -116,6 +121,12 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
     league = (Array.isArray(again.body) && again.body.find(l => l && l.name === settings.leagueName && l.id)) || null;
   }
   if (!league) throw new Error(`poe.ninja does not list the league "${settings.leagueName}".`);
+  // A new league starts clean: another league's prices must never feed this league's history or statistics.
+  if (state.league && state.league.name !== league.name) {
+    state.categories = {}; state.etags = { leagues: state.etags.leagues }; state.iconFail = {};
+    for (const key of Object.keys(history)) delete history[key];
+    console.log(`League changed from ${state.league.name} to ${league.name}: history and saved prices reset.`);
+  }
   state.league = { id: league.id, name: league.name };
 
   let fresh = 0;
@@ -144,7 +155,16 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
       if (!last || last[1] !== line.v || last[2] !== line.a) if (!last || last[0] < at) list.push([at, line.v, line.a]);
     }
   }
-  for (const key of Object.keys(history)) { history[key] = history[key].filter(p => p[0] >= cutoff); if (!history[key].length) delete history[key]; }
+  // Keep one point from before the cutoff: it is the price at the start of the window (still valid until the next change).
+  // Items no longer listed are pruned strictly.
+  const listed = new Set();
+  for (const category of Object.keys(state.categories)) for (const line of state.categories[category].lines) listed.add(`${category}:${line.id}`);
+  for (const key of Object.keys(history)) {
+    const list = history[key], firstIn = list.findIndex(p => p[0] >= cutoff);
+    history[key] = firstIn === -1 ? (listed.has(key) ? list.slice(-1) : []) : list.slice(Math.max(0, firstIn - 1));
+    if (!history[key].length) delete history[key];
+  }
+
 
   let iconFiles = new Map();
   try { iconFiles = await syncIcons({ outDir, state, fetchImpl, t, delayMs, ua }); } catch (error) { failures.push(`icons: ${error.message}`); }

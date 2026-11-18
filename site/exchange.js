@@ -13,7 +13,9 @@ const ceilBig = a => (a.n >= 0n ? (a.n + a.d - 1n) / a.d : -((-a.n) / a.d));
 const roundBig = a => (a.n >= 0n ? (2n * a.n + a.d) / (2n * a.d) : -((2n * -a.n + a.d) / (2n * a.d)));
 
 function parseDec(text) {
-  const s = String(text ?? "").trim().replace(/,/g, ".").replace(/\s+/g, "");
+  const raw = String(text ?? "").trim().replace(/\s+/g, "");
+  // "1,000" and "1,234.5" use commas as thousands separators; "1,5" is a decimal comma.
+  const s = /^\d{1,3}(,\d{3})+(\.\d+)?$/.test(raw) ? raw.replace(/,/g, "") : raw.replace(/,/g, ".");
   const m = /^(\d*)(?:\.(\d*))?$/.exec(s);
   if (!m || (m[1] === "" && (m[2] === undefined || m[2] === ""))) return null;
   const whole = m[1] || "0", decimals = m[2] || "";
@@ -151,7 +153,8 @@ if (typeof document !== "undefined") {
       const how = tier === "fair" ? "close to market" : `${Math.abs(diff).toFixed(1)}% ${diff > 0 ? "more" : "less"} ${rn} than market`;
       box.className = "xc-market " + tier;
       // Live margin from the amounts actually typed (so whole-number tweaks show), else from the ratio.
-      const lq = Number(String($("left-qty").value).replace(",", ".")), rq = Number(String($("right-qty").value).replace(",", "."));
+      const toNum = v => { const d = parseDec(v); return d ? Number(d.n) / Number(d.d) : NaN; };
+      const lq = toNum($("left-qty").value), rq = toNum($("right-qty").value);
       const live = lq > 0 && rq > 0 ? (rq / lq / market - 1) * 100 : diff;
       const lm = $("live-margin"), ltier = live >= 0.05 ? "good" : live <= -0.05 ? "bad" : "fair";
       lm.className = "xc-live " + ltier;
@@ -523,7 +526,7 @@ if (typeof document !== "undefined") {
   // Typing a margin sets the ratio from the market ratio; otherwise the box just follows the numbers.
   $("margin").addEventListener("input", () => {
     if (!state.left || !state.right) return;
-    const txt = $("margin").value.trim().replace(",", ".");
+    const txt = (/^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/.test($("margin").value.trim()) ? $("margin").value.trim().replace(/,/g, "") : $("margin").value.trim().replace(",", "."));
     if (!/^[+-]?\d*\.?\d+$/.test(txt)) return;
     const m = Math.max(-99, Math.min(1000, Number(txt))) / 100;
     $("ratio").value = marketText(state.left.divine / state.right.divine * (1 + m));
@@ -546,7 +549,7 @@ if (typeof document !== "undefined") {
     applyPair(q.get("left"), q.get("right"), q.get("ratio"));
   });
   $("add-ledger").addEventListener("click", () => {
-    const msg = $("add-msg"), num = v => Number(String(v).trim().replace(/,/g, "."));
+    const msg = $("add-msg"), num = v => { const d = parseDec(v); return d ? Number(d.n) / Number(d.d) : NaN; };
     const res = window.Ledger && state.left && state.right
       ? window.Ledger.addFromCalc({ key: state.left.key, qty: num($("left-qty").value) }, { key: state.right.key, qty: num($("right-qty").value) })
       : { ok: false, text: "Prices are still loading." };

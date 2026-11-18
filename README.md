@@ -2,7 +2,7 @@
 
 Currency exchange calculator and trade ledger, hosted as a static site, fed by an hourly GitHub Actions capture.
 
-- `scripts/capture.js`: economy-only poe.ninja capture (supported economy overview endpoints, ETags, descriptive User-Agent). Writes `market.json`, `history.json`, `state.json`.
+- `scripts/capture.js`: economy-only poe.ninja capture (supported economy overview endpoints, ETags, descriptive User-Agent). Writes `market.json`, `history.json`, `state.json`, and downloads each icon once into `icons/` (a few dozen per run).
 - `.github/workflows/capture.yml`: runs hourly, publishes the files to the `data` branch (one rewritten commit, so the repo never grows).
 - `site/`: the static website (deploy this folder to Cloudflare Pages).
 - `scripts/sync-tools.js`: re-copies the tools from the Data Desk app into `site/` (run it after improving the tools there).
@@ -20,3 +20,8 @@ Currency exchange calculator and trade ledger, hosted as a static site, fed by a
 - GitHub may pause scheduled workflows on repositories with no activity for 60 days; re-enable on the Actions tab if you get the email.
 - Scheduled runs can start 10-30 minutes late at busy times.
 - Not affiliated with or endorsed by poe.ninja or Grinding Gear Games. Prices are estimates only.
+
+## Switching to a new league
+1. On GitHub open `config/settings.json`, click the pencil, change `leagueName` to the league's name exactly as poe.ninja spells it, and commit.
+2. Run **Actions > Capture poe.ninja economy > Run workflow**. The capture notices the league changed and starts a fresh history; the old league's prices never feed the new one.
+3. Each league has its own ledger in a visitor's browser. Existing trades move to the first league the page sees after this update, and a new league starts empty.

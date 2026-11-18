@@ -5,7 +5,7 @@
   const MM = window.MarketModel;
   const $ = id => document.getElementById(id);
   const STORE = "poe2dd.ledger.v1", SEEN = "poe2dd.ledger.seen";
-  const state = { items: [], map: new Map(), opts: MM.DEFAULT_OPTIONS, settings: null, trades: [], capturedAt: null, source: "live" };
+  const state = { items: [], map: new Map(), opts: MM.DEFAULT_OPTIONS, settings: null, trades: [], capturedAt: null, source: "live", league: "" };
 
   // ---------- small helpers ----------
   const el = (tag, attrs = {}, ...kids) => {
@@ -14,20 +14,37 @@
     for (const kid of kids) e.append(typeof kid === "string" ? document.createTextNode(kid) : kid);
     return e;
   };
-  const num = v => { const n = Number(String(v).trim().replace(/,/g, ".")); return Number.isFinite(n) ? n : NaN; };
+  // "1,000" and "1,234.5" are thousands separators; "1,5" is a decimal comma. Anything else is left for Number() to reject.
+  const plainNumber = text => { const t = String(text ?? "").trim().replace(/\s+/g, ""); return /^\d{1,3}(,\d{3})+(\.\d+)?$/.test(t) ? t.replace(/,/g, "") : t.replace(/,/g, "."); };
+  const num = v => { const n = Number(plainNumber(v)); return Number.isFinite(n) ? n : NaN; };
   const fmt = v => { const n = Number(v); if (!Number.isFinite(n)) return "-"; return n >= 100 ? n.toFixed(1).replace(/\.0$/, "") : Number(n.toPrecision(4)).toString(); };
   const pct = v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
   const when = iso => new Date(iso).toLocaleString("en-AU", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
   const uid = () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
   const tone = v => (v >= 0 ? "lg-pos" : "lg-neg");
 
+  // Each league keeps its own ledger, so trades from an old league are never valued at the new league's prices.
+  // Trades saved before leagues were tracked (the plain key) move to the first league the page sees.
+  const leagueSlug = v => String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const storeKey = () => (state.league ? `${STORE}:${state.league}` : STORE);
+  function adoptLeague(name) {
+    const slug = leagueSlug(name);
+    if (!slug || slug === state.league) return false;
+    state.league = slug;
+    try {
+      const legacy = localStorage.getItem(STORE);
+      if (legacy && !localStorage.getItem(storeKey())) { localStorage.setItem(storeKey(), legacy); localStorage.removeItem(STORE); }
+    } catch { /* storage blocked */ }
+    state.trades = loadTrades();
+    return true;
+  }
   function loadTrades() {
     try {
-      const j = JSON.parse(localStorage.getItem(STORE) || "{}");
+      const j = JSON.parse(localStorage.getItem(storeKey()) || "{}");
       return Array.isArray(j.trades) ? j.trades.filter(validTrade) : [];
     } catch { return []; }
   }
-  function saveTrades() { try { localStorage.setItem(STORE, JSON.stringify({ version: 1, trades: state.trades })); } catch { /* storage blocked: kept in memory only */ } }
+  function saveTrades() { try { localStorage.setItem(storeKey(), JSON.stringify({ version: 1, trades: state.trades })); } catch { /* storage blocked: kept in memory only */ } }
   function validTrade(t) {
     return t && typeof t.id === "string" && t.give && t.get && typeof t.give.key === "string" && typeof t.get.key === "string"
       && t.give.qty > 0 && t.get.qty > 0 && Number.isFinite(Date.parse(t.ts));
@@ -242,7 +259,7 @@
 
   // ---------- data tools ----------
   function exportData() {
-    const blob = new Blob([JSON.stringify({ app: "poe2-data-desk-ledger", version: 1, exportedAt: new Date().toISOString(), trades: state.trades }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ app: "poe2-data-desk-ledger", version: 1, league: state.league, exportedAt: new Date().toISOString(), trades: state.trades }, null, 2)], { type: "application/json" });
     const a = el("a", { href: URL.createObjectURL(blob), download: `trade-ledger-${new Date().toISOString().slice(0, 10)}.json` });
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
@@ -261,7 +278,8 @@
       const have = new Set(state.trades.map(t => t.id));
       const added = incoming.filter(t => !have.has(t.id));
       state.trades.push(...added); saveTrades(); render();
-      msg.textContent = `Imported ${added.length} trade${added.length === 1 ? "" : "s"}${incoming.length - added.length ? ` (${incoming.length - added.length} already there)` : ""}.`;
+      const other = parsed && typeof parsed.league === "string" && state.league && leagueSlug(parsed.league) !== state.league ? ` This backup is from a different league (${parsed.league.slice(0, 40)}); its trades are valued at the current league's prices.` : "";
+      msg.textContent = `Imported ${added.length} trade${added.length === 1 ? "" : "s"}${incoming.length - added.length ? ` (${incoming.length - added.length} already there)` : ""}.${other}`;
     });
   }
 
@@ -273,7 +291,7 @@
       const data = await MM.loadMarket();
       state.settings = await MM.loadSettings();
       state.opts = MM.optionsFrom(state.settings.values);
-      state.items = data.items; state.map = MM.byKey(state.items); state.capturedAt = data.capturedAt;
+      state.items = data.items; state.map = MM.byKey(state.items); state.capturedAt = data.capturedAt; adoptLeague(data.league);
       const stamp = data.capturedAt ? new Date(data.capturedAt).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }) : "unknown time";
       $("lg-meta").textContent = `Prices from ${data.source === "snapshot" ? "a saved poe.ninja snapshot" : "the latest poe.ninja capture"} (${stamp}). Estimates only.`;
       buildLabels(); render();
@@ -290,7 +308,7 @@
       const data = await MM.loadMarket();
       if (data.capturedAt === state.capturedAt && data.source !== "snapshot") return;
       if (data.capturedAt === state.capturedAt) return;
-      state.items = data.items; state.map = MM.byKey(state.items); state.capturedAt = data.capturedAt;
+      state.items = data.items; state.map = MM.byKey(state.items); state.capturedAt = data.capturedAt; adoptLeague(data.league);
       const stamp = data.capturedAt ? new Date(data.capturedAt).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }) : "unknown time";
       $("lg-meta").textContent = `Prices from ${data.source === "snapshot" ? "a saved poe.ninja snapshot" : "the latest poe.ninja capture"} (${stamp}). Estimates only. Refreshes itself.`;
       render();

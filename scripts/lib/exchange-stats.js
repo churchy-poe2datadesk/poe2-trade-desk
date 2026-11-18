@@ -42,10 +42,19 @@ function weekShape(value, spark) {
 }
 
 // One value per UTC day (the median of that day's distinct captures), newest 31 days.
+// A day with no change in price still has a price: the last known value carries forward, so flat stretches count as days.
 function dailyBars(distinct) {
   const days = new Map();
   for (const p of distinct) { const d = Math.floor(p.t / DAY_MS); if (!days.has(d)) days.set(d, []); days.get(d).push(p.v); }
-  return [...days.entries()].sort((a, b) => a[0] - b[0]).map(([d, vs]) => [d * DAY_MS / 1000, Number(median(vs).toPrecision(5))]);
+  const keys = [...days.keys()].sort((a, b) => a - b);
+  if (!keys.length) return [];
+  const bars = []; let last = null;
+  for (let d = keys[0]; d <= keys[keys.length - 1]; d++) {
+    const value = days.has(d) ? median(days.get(d)) : last;
+    last = days.has(d) ? days.get(d)[days.get(d).length - 1] : last; // carry the day's final price forward
+    bars.push([d * DAY_MS / 1000, Number(value.toPrecision(5))]);
+  }
+  return bars;
 }
 
 // Swing profile from every stored capture (last 30 days). Swings are measured on detrended log prices, so a

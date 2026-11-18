@@ -1,0 +1,6 @@
+{
+  "leagueName": "Forbidden Rites",
+  "contact": "churchyplaysgames@gmail.com",
+  "apiRoot": "https://poe.ninja/poe2/api/economy",
+  "historyDays": 30
+}

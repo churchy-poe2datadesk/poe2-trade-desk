@@ -121,6 +121,15 @@
       body.append(el("div", { class: "lg-btns" }, ok, no));
     });
   }
+  // "Ask before deleting" (on by default; remembered in this browser). With it off, deleting a trade happens at once and a
+  // message offers Undo. Closing a trade always opens its own amount box. Clearing many trades at once always asks.
+  const CONFIRM_KEY = "poe2dd.ledgerConfirm";
+  const confirmOn = () => { const box = $("lg-confirm"); return !box || box.checked; };
+  function removeTrade(trade, title, text) {
+    const before = state.trades.slice();
+    state.trades = state.trades.filter(x => x.id !== trade.id); saveTrades(); render();
+    if (!confirmOn()) toast("info", title, text, { label: "Undo", run: () => { state.trades = before; saveTrades(); render(); } });
+  }
   function toast(kind, title, text, action) {
     const t = el("div", { class: `lg-toast ${kind}`, role: "status" }, el("b", {}, title), el("span", {}, text));
     const close = el("button", { type: "button", class: "xc-btn" }, "Dismiss"); close.addEventListener("click", () => t.remove());
@@ -141,22 +150,39 @@
   // closed by clicking it, and what you opened stays open when prices refresh.
   const VIEW_KEY = "poe2dd.ledgerView";
   const view = { mode: (() => { try { return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "cards"; } catch { return "cards"; } })(), open: new Map() };
-  function collapsible(id, title, sub, result, resultCls, body) {
-    const d = el("details", { class: "lg-pcard lg-coll" + (view.mode === "list" ? " lg-compact" : "") });
+  function collapsible(id, title, sub, result, resultCls, body, cols) {
+    const list = view.mode === "list" && cols;
+    const d = el("details", { class: list ? "lg-row" : "lg-pcard lg-coll" });
     d.open = view.open.has(id) ? view.open.get(id) : view.mode === "cards";
     d.addEventListener("toggle", () => view.open.set(id, d.open));
-    const sum = el("summary", {}, el("span", { class: "lg-sum-t" }, title), el("span", { class: "lg-sum-m" }, sub));
-    if (result) sum.append(el("strong", { class: "lg-sum-r " + (resultCls || "") }, result));
+    let sum;
+    if (list) {
+      // A real list: one line per position with the numbers in columns, details open underneath when clicked.
+      sum = el("summary", { class: "lg-cols" }, el("span", { class: "lg-c-name" }, title));
+      sum.style.gridTemplateColumns = tracks(cols.map(c => !!c.node)); // set from script: the page policy blocks style attributes
+      for (const c of cols) sum.append(c.node ? el("span", { class: "lg-c lg-act" }, c.node) : el("span", { class: "lg-c " + (c.cls || "") }, c.t));
+    } else {
+      sum = el("summary", {}, el("span", { class: "lg-sum-t" }, title), el("span", { class: "lg-sum-m" }, sub));
+      if (result) sum.append(el("strong", { class: "lg-sum-r " + (resultCls || "") }, result));
+    }
     d.append(sum, body);
     return d;
   }
+  // Column titles above a list.
+  // Grid columns for a list row: a name column, then equal columns; a column holding a button is only as wide as the button.
+  const tracks = acts => `minmax(0,1.5fr) ${acts.map(a => (a ? "auto" : "minmax(0,1fr)")).join(" ")}`;
+  const listHead = (labels, acts) => {
+    const h = el("div", { class: "lg-cols lg-head", "aria-hidden": "true" }, el("span", { class: "lg-c-name" }, labels[0]), ...labels.slice(1).map(t => el("span", { class: "lg-c" }, t)));
+    h.style.gridTemplateColumns = tracks(acts);
+    return h;
+  };
   function setView(mode) {
     view.mode = mode; view.open.clear();
     try { localStorage.setItem(VIEW_KEY, mode); } catch { /* kept for this page */ }
     render();
   }
   function setAll(open) {
-    document.querySelectorAll("#positions details.lg-coll, #closed details.lg-coll").forEach(d => { d.open = open; });
+    document.querySelectorAll("#positions details, #closed details").forEach(d => { d.open = open; });
   }
 
   function positionCard(trade) {
@@ -192,9 +218,12 @@
     }
     const close = el("button", { type: "button", class: "xc-btn" }, "Close position…"), del = el("button", { type: "button", class: "xc-btn lg-danger" }, "Delete");
     close.addEventListener("click", () => closePosition(trade, pos));
-    del.addEventListener("click", () => confirmBox("Delete this trade?", "This removes it from your ledger. It cannot be undone.", "Delete", () => { state.trades = state.trades.filter(t => t.id !== trade.id); saveTrades(); render(); }));
+    del.addEventListener("click", () => { const go = () => removeTrade(trade, "Trade deleted", `${fmt(trade.get.qty)} ${nameOf(trade.get.key)} was removed.`); if (confirmOn()) confirmBox("Delete this trade?", "This removes it from your ledger. It cannot be undone.", "Delete", go); else go(); });
     card.append(el("div", { class: "lg-btns" }, close, del));
-    return collapsible(trade.id, `${fmt(trade.get.qty)} ${nameOf(trade.get.key)}`, `paid ${fmt(trade.give.qty)} ${nameOf(trade.give.key)}`, pos ? pct(pos.plPct) : "", pos ? tone(pos.plPct) : "", card);
+    const rowClose = el("button", { type: "button", class: "xc-btn lg-rowbtn" }, "Close");
+    rowClose.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); closePosition(trade, pos); });
+    return collapsible(trade.id, `${fmt(trade.get.qty)} ${nameOf(trade.get.key)}`, `paid ${fmt(trade.give.qty)} ${nameOf(trade.give.key)}`, pos ? pct(pos.plPct) : "", pos ? tone(pos.plPct) : "", card,
+      [{ t: `${fmt(trade.give.qty)} ${nameOf(trade.give.key)}` }, { t: pos ? `${fmt(pos.nowInA)} ${nameOf(trade.give.key)}` : "-" }, { t: pos ? pct(pos.plPct) : "-", cls: pos ? tone(pos.plPct) : "" }, { t: pos ? pct(pos.plNetPct) : "-", cls: pos ? tone(pos.plNetPct) : "" }, { node: rowClose }]);
   }
 
   function closePosition(trade, pos) {
@@ -231,14 +260,19 @@
     const host = $("closed"); host.textContent = "";
     const list = state.trades.filter(t => t.closed).sort((a, b) => Date.parse(b.closed.ts) - Date.parse(a.closed.ts));
     if (!list.length) { host.append(el("p", { class: "lg-empty" }, "Nothing closed yet.")); return; }
+    host.classList.toggle("lg-table", view.mode === "list");
+    if (view.mode === "list") host.append(listHead(["Position", "Paid", "Closed", "Result", ""], [false, false, false, true]));
     for (const t of list) {
       const real = (t.closed.qty / t.give.qty - 1) * 100;
       const del = el("button", { type: "button", class: "xc-btn lg-danger" }, "Delete");
-      del.addEventListener("click", () => confirmBox("Delete this closed trade?", "It cannot be undone.", "Delete", () => { state.trades = state.trades.filter(x => x.id !== t.id); saveTrades(); render(); }));
+      del.addEventListener("click", () => { const go = () => removeTrade(t, "Closed trade deleted", `${fmt(t.get.qty)} ${nameOf(t.get.key)} was removed.`); if (confirmOn()) confirmBox("Delete this closed trade?", "It cannot be undone.", "Delete", go); else go(); });
+      const rowDel = el("button", { type: "button", class: "xc-btn lg-rowbtn lg-danger" }, "Delete");
+      rowDel.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); del.click(); });
       host.append(collapsible(`closed:${t.id}`, `${fmt(t.get.qty)} ${nameOf(t.get.key)} \u2192 ${fmt(t.closed.qty)} ${nameOf(t.give.key)}`, `closed ${when(t.closed.ts)}`, pct(real), tone(real), el("div", { class: "lg-body" },
         el("p", { class: "lg-meta" }, `Opened ${when(t.ts)} · closed ${when(t.closed.ts)} · paid ${fmt(t.give.qty)} ${nameOf(t.give.key)}`),
         el("div", { class: "lg-grid" }, el("div", {}, el("span", {}, "Result"), el("strong", { class: tone(real) }, pct(real)))),
-        el("div", { class: "lg-btns" }, del))));
+        el("div", { class: "lg-btns" }, del)),
+        [{ t: `${fmt(t.give.qty)} ${nameOf(t.give.key)}` }, { t: when(t.closed.ts) }, { t: pct(real), cls: tone(real) }, { node: rowDel }]));
     }
   }
 
@@ -274,6 +308,8 @@
     const open = state.trades.filter(t => !t.closed).sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
     const host = $("positions"); host.textContent = "";
     if (!open.length) host.append(el("p", { class: "lg-empty" }, "No open positions. Log a trade above to start tracking it."));
+    host.classList.toggle("lg-table", view.mode === "list");
+    if (open.length && view.mode === "list") host.append(listHead(["Position", "Paid", "Worth now", "Profit", "After spread", ""], [false, false, false, false, true]));
     for (const t of open) host.append(positionCard(t));
     renderSummary(); renderClosed(); renderAlerts();
   }
@@ -306,6 +342,11 @@
 
   function paintViewButtons() {
     document.querySelectorAll("#lg-view [data-view]").forEach(b => b.classList.toggle("on", b.dataset.view === view.mode));
+  }
+  const confirmBoxEl = $("lg-confirm");
+  if (confirmBoxEl) {
+    try { confirmBoxEl.checked = localStorage.getItem(CONFIRM_KEY) !== "0"; } catch { /* default: on */ }
+    confirmBoxEl.addEventListener("change", () => { try { localStorage.setItem(CONFIRM_KEY, confirmBoxEl.checked ? "1" : "0"); } catch { /* kept for this page */ } });
   }
   const bar = $("lg-view");
   if (bar) {

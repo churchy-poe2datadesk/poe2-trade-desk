@@ -6,6 +6,7 @@
 // endpoints, sends conditional requests, a descriptive User-Agent, and waits between requests.
 
 const fs = require("node:fs/promises");
+const crypto = require("node:crypto");
 const path = require("node:path");
 const { weekShape, swingProfile } = require("./lib/exchange-stats");
 
@@ -22,15 +23,67 @@ async function writeJson(file, data) {
 }
 
 function lineSummary(data) {
-  const names = new Map();
-  for (const item of Array.isArray(data.items) ? data.items : []) if (item && item.id !== undefined && item.name) names.set(String(item.id), String(item.name));
+  const names = new Map(), images = new Map();
+  for (const item of Array.isArray(data.items) ? data.items : []) {
+    if (item && item.id !== undefined && item.name) names.set(String(item.id), String(item.name));
+    if (item && item.id !== undefined && typeof item.image === "string") images.set(String(item.id), item.image);
+  }
   return data.lines.filter(l => l && l.id !== undefined).map(l => {
     const spark = l.sparkline || l.sparkLine || null;
     return {
-      id: String(l.id), name: names.get(String(l.id)) || String(l.id), v: num(l.primaryValue), a: num(l.volumePrimaryValue),
+      id: String(l.id), name: names.get(String(l.id)) || String(l.id), i: images.get(String(l.id)) || null, v: num(l.primaryValue), a: num(l.volumePrimaryValue),
       s: spark ? { total: num(spark.totalChange), data: Array.isArray(spark.data) ? spark.data.map(num) : [] } : null
     };
   });
+}
+
+
+// ---------- icons ----------
+// Each icon is downloaded once (a few new ones per run at most), from the same hosts poe.ninja uses, and published
+// beside the data so visitors load them from our own address, never from poe.ninja or Grinding Gear Games.
+const ICON_HOSTS = ["https://web.poecdn.com", "https://poe.ninja"];
+const MAX_ICON_BYTES = 250 * 1024, MAX_NEW_ICONS = 120, RETRY_FAILED_MS = 6 * 3600 * 1000;
+const iconUrls = src => {
+  if (typeof src !== "string" || !src) return [];
+  if (src.startsWith("/gen/image/")) return ICON_HOSTS.map(h => h + src);
+  try { const u = new URL(src); return u.protocol === "https:" && ICON_HOSTS.some(h => new URL(h).hostname === u.hostname) ? [u.href] : []; } catch { return []; }
+};
+const iconId = src => crypto.createHash("sha1").update(src).digest("hex").slice(0, 20);
+function iconKind(b) {
+  if (b.length > 8 && b.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]))) return "png";
+  if (b.length > 12 && b.subarray(0, 4).toString() === "RIFF" && b.subarray(8, 12).toString() === "WEBP") return "webp";
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8) return "jpg";
+  return null;
+}
+async function exists(file) { try { await fs.access(file); return true; } catch { return false; } }
+
+async function syncIcons({ outDir, state, fetchImpl, t, delayMs, ua }) {
+  const dir = path.join(outDir, "icons"); await fs.mkdir(dir, { recursive: true });
+  const known = new Map(); // src -> file name
+  for (const name of await fs.readdir(dir)) { const m = name.match(/^([a-f0-9]{20})\.(png|webp|jpg)$/); if (m) known.set(m[1], name); }
+  state.iconFail = state.iconFail || {};
+  const wanted = new Set();
+  for (const snap of Object.values(state.categories)) for (const line of snap.lines) if (line.i && iconUrls(line.i).length) wanted.add(line.i);
+  let fetched = 0;
+  for (const src of wanted) {
+    const id = iconId(src);
+    if (known.has(id) || fetched >= MAX_NEW_ICONS) continue;
+    if (state.iconFail[id] && t - state.iconFail[id] < RETRY_FAILED_MS) continue;
+    let saved = false;
+    for (const url of iconUrls(src)) {
+      try {
+        const res = await fetchImpl(url, { headers: { "User-Agent": ua }, signal: AbortSignal.timeout(8000), redirect: "error" });
+        if (!res.ok) continue;
+        const buf = Buffer.from(await res.arrayBuffer()), kind = iconKind(buf);
+        if (!kind || !buf.length || buf.length > MAX_ICON_BYTES) continue;
+        const name = `${id}.${kind}`; await fs.writeFile(path.join(dir, name), buf); known.set(id, name); saved = true; break;
+      } catch { /* try the next host */ }
+    }
+    if (!saved) state.iconFail[id] = t; else delete state.iconFail[id];
+    fetched++;
+    await sleep(delayMs);
+  }
+  return known; // id -> file name
 }
 
 async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now(), delayMs = 1500 }) {
@@ -82,6 +135,9 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
   }
   for (const key of Object.keys(history)) { history[key] = history[key].filter(p => p[0] >= cutoff); if (!history[key].length) delete history[key]; }
 
+  let iconFiles = new Map();
+  try { iconFiles = await syncIcons({ outDir, state, fetchImpl, t, delayMs, ua }); } catch (error) { failures.push(`icons: ${error.message}`); }
+
   const items = []; let latest = null;
   for (const category of Object.keys(state.categories)) {
     const snap = state.categories[category];
@@ -90,7 +146,8 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
       if (!(line.v > 0)) continue;
       const points = (history[`${category}:${line.id}`] || []).map(p => ({ t: p[0] * 1000, v: p[1] }));
       const spark7 = line.s ? { total: line.s.total, data: line.s.data } : null;
-      items.push({ key: `${category}:${line.id}`, name: line.name, category, divine: line.v, activity: Number(line.a) || 0,
+      const iconFile = line.i && iconFiles.get(iconId(line.i));
+      items.push({ key: `${category}:${line.id}`, name: line.name, category, ...(iconFile ? { icon: `/icons/${iconFile}` } : {}), divine: line.v, activity: Number(line.a) || 0,
         change7: Number.isFinite(spark7 && spark7.total) ? spark7.total : null, ...(weekShape(line.v, spark7) || {}), prof: swingProfile(points, line.v) });
     }
   }

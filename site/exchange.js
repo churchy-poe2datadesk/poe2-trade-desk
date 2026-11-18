@@ -487,6 +487,7 @@ if (typeof document !== "undefined") {
     rightCombo = makeCombo($("combo-right"), "right");
     try {
       const data = await MM.loadMarket();
+      if (window.ToolsUI && ToolsUI.setLeague) ToolsUI.setLeague(data.league);
       settingsState = await MM.loadSettings();
       opts = MM.optionsFrom(settingsState.values);
       const order = c => (c === "Currency" ? "" : c);

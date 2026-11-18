@@ -31,11 +31,8 @@ for (const f of ["exchange.js", "ledger.js"]) {
     ["(local backend only; it never contacts poe.ninja)", "(this page only reads the published data file; it never contacts poe.ninja)"]
   ]).split("/exchange?").join("/tradedesk?").split("a[href^='/exchange?']").join("a[href^='/tradedesk?']"));
 }
-write("tools-ui.js", patch(read("tools-ui.js"), "tools-ui.js", [
-  ['const links = [["/exchange", "Trade Desk", "exchange"]];', 'const links = [["/tradedesk", "Trade Desk", "exchange"]];'],
-  ['if (location.protocol === "file:") a.setAttribute("href", "exchange.html");', 'if (location.protocol === "file:") a.setAttribute("href", "tradedesk.html");'],
-  ['const gear = el("button"', 'if (window.REPORTS_URL) host.prepend(el("a", { href: window.REPORTS_URL, class: "xc-navlink" }, document.createTextNode("\u2190 Home")));\n    const gear = el("button"']
-]));
+write("tools-ui.js", read("tools-ui.js")); // the top bar reads window.REPORTS_URL (config.js) itself
+
 write("exchange.css", read("exchange.css") + "\n.pt-footer{margin:32px 0 8px;padding-top:14px;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}\n");
 write("ledger.css", read("ledger.css"));
 

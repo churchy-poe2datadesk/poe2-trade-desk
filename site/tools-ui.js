@@ -11,25 +11,35 @@
     return e;
   };
 
+  // The sticky top bar, laid out like the reports' bar: Home on the left, what this page is in the middle
+  // (with the softcore / hardcore switch), Settings on the right.
   function mountNav(current) {
     const host = document.getElementById("tools-nav");
     if (!host) return;
-    const links = [["/tradedesk", "Trade Desk", "exchange"]];
-    for (const [href, label, id] of links) {
-      const a = el("a", { href, class: "xc-navlink" + (id === current ? " on" : "") }, document.createTextNode(label));
-      if (location.protocol === "file:") a.setAttribute("href", "tradedesk.html");
-      host.append(a);
-    }
-    if (/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) host.append(el("a", { href: "http://127.0.0.1:3212/", class: "xc-navlink" }, document.createTextNode("Dashboard")));
-    // Softcore / hardcore switch. The coloured tag shows which one the prices below are for (green softcore, red hardcore).
+    const local = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+    const left = el("span", { class: "xc-nav-l" });
+    if (window.REPORTS_URL) left.append(el("a", { href: window.REPORTS_URL, class: "xc-navlink" }, document.createTextNode("\u2190 Home")));
+    if (local) left.append(el("a", { href: "http://127.0.0.1:3212/", class: "xc-navlink" }, document.createTextNode("\u2190 Dashboard")));
+
     const mode = MM.getMode();
     const pick = el("select", { class: "xc-input xc-modepick", "aria-label": "Softcore or hardcore market" });
     for (const [value, label] of [["sc", "Softcore"], ["hc", "Hardcore"]]) { const o = el("option", { value }, document.createTextNode(label)); if (value === mode) o.selected = true; pick.append(o); }
-    pick.addEventListener("change", () => { MM.setMode(pick.value); const u = new URL(location.href); u.searchParams.delete("mode"); location.href = u.toString(); });
-    host.append(el("span", { class: "xc-modewrap" }, pick, el("span", { class: "xc-modetag xc-mode-" + mode }, document.createTextNode(mode === "hc" ? "HARDCORE" : "SOFTCORE"))));
-    if (window.REPORTS_URL) host.prepend(el("a", { href: window.REPORTS_URL, class: "xc-navlink" }, document.createTextNode("← Home")));
-    const gear = el("button", { id: "open-settings", type: "button", class: "xc-btn xc-navbtn" }, document.createTextNode("⚙ Settings"));
-    host.append(gear);
+    const switchTo = m => { MM.setMode(m); const u = new URL(location.href); u.searchParams.delete("mode"); location.href = u.toString(); };
+    pick.addEventListener("change", () => switchTo(pick.value));
+    const tag = el("button", { type: "button", class: "xc-modetag xc-mode-" + mode, title: "Click to switch to " + (mode === "hc" ? "softcore" : "hardcore") }, document.createTextNode(mode === "hc" ? "HARDCORE" : "SOFTCORE"));
+    tag.addEventListener("click", () => switchTo(mode === "hc" ? "sc" : "hc"));
+    const league = el("span", { class: "xc-nav-league", id: "xc-nav-league" });
+    const mid = el("span", { class: "xc-nav-mid" }, el("strong", {}, document.createTextNode("Trade Desk")), league, pick, tag);
+
+    const gear = el("button", { id: "open-settings", type: "button", class: "xc-btn xc-navbtn" }, document.createTextNode("\u2699 Settings"));
+    host.append(left, mid, el("span", { class: "xc-nav-r" }, gear));
+  }
+  // Called once the market data is loaded: shows the league name in the bar ("HC Forbidden Rites" or "forbidden-rites-hc" become "Forbidden Rites").
+  function setLeague(name) {
+    const node = document.getElementById("xc-nav-league");
+    if (!node || !name) return;
+    const pretty = String(name).replace(/-/g, " ").replace(/^hc\s+/i, "").replace(/\s+hc$/i, "").replace(/\b[a-z]/g, c => c.toUpperCase());
+    node.textContent = ` \u00b7 ${pretty} \u00b7 `;
   }
 
   // state: { values, source }; onSaved(values) runs after a successful save.
@@ -82,5 +92,5 @@
     reset.addEventListener("click", () => commit(collect(true)));
   }
 
-  window.ToolsUI = { mountNav, openSettings };
+  window.ToolsUI = { mountNav, openSettings, setLeague };
 })();

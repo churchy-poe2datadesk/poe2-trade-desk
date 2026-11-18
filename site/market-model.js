@@ -336,7 +336,8 @@
     const hc = getMode() === "hc";
     for (const url of [hc ? (window.MARKET_URL_HC || "market-hc.json") : (window.MARKET_URL || "market.json")]) {
       try {
-        const r = await fetch(url, { cache: "no-store" });
+        // The local backend is always asked fresh. A published data file is revalidated instead ("has it changed?"), so an unchanged file costs a few bytes, not a full download.
+        const r = await fetch(url, { cache: /^\/exchange\//.test(url) ? "no-store" : "no-cache" });
         if (!r.ok) continue;
         const j = await r.json();
         if (j && Array.isArray(j.items) && j.items.length) return { ...j, mode: hc ? "hc" : "sc", source: /market(-hc)?\.json$/.test(url) ? "snapshot" : "live" };

@@ -186,7 +186,7 @@
   }
 
   function positionCard(trade) {
-    const { pos, options, basis } = MM.swapOptions(trade, state.map, state.items, state.opts, 3);
+    const { pos, options, basis, tooSmall } = MM.swapOptions(trade, state.map, state.items, state.opts, 3);
     const A = state.map.get(trade.give.key), B = state.map.get(trade.get.key);
     const card = el("div", { class: "lg-body" });
     card.append(el("p", { class: "lg-meta" }, `Paid ${fmt(trade.give.qty)} ${nameOf(trade.give.key)} on ${when(trade.ts)} · ratio ${fmt(trade.get.qty / trade.give.qty)} per 1${trade.note ? ` · “${trade.note}”` : ""}`));
@@ -207,10 +207,10 @@
         stat("Market ratio now", `${fmt(pos.marketRatio)} per 1`)));
       card.append(el("div", { class: "lg-h" }, "Top 3 swaps"));
       const ul = el("ul", { class: "lg-swaps" });
-      if (!options.length) ul.append(el("li", { class: "lg-empty" }, basis && !(basis.F > 0) ? `There is no reliable usual price for ${nameOf(trade.get.key)} yet (${basis.trending ? "its price has been trending" : "not enough history"}), so swap ideas are held back until there is.` : "No swap looks profitable right now once trading costs are paid. Holding, or selling at a better time, may be wiser."));
+      if (!options.length) ul.append(el("li", { class: "lg-empty" }, basis && !(basis.F > 0) ? `There is no reliable usual price for ${nameOf(trade.get.key)} yet (${basis.trending ? "its price has been trending" : "not enough history"}), so swap ideas are held back until there is.` : tooSmall ? `A swap looks profitable, but ${fmt(trade.get.qty)} ${nameOf(trade.get.key)} is too little to get even 1 whole unit of the other currency (the exchange only trades whole numbers). Hold until you have more, or sell it for something cheaper.` : "No swap looks profitable right now once trading costs are paid. Holding, or selling at a better time, may be wiser."));
       for (const o of options) {
         ul.append(el("li", { class: "lg-swap" },
-          el("span", {}, el("b", {}, `${nameOf(o.C.key)}`), ` · you'd receive about ${fmt(o.receive)}`,
+          el("span", {}, el("b", {}, `${nameOf(o.C.key)}`), ` · swap ${fmt(o.give)} ${nameOf(trade.get.key)} for about ${fmt(o.receive)}${o.keep > 0.0001 ? ` · keep ${fmt(o.keep)} ${nameOf(trade.get.key)}` : ""}`,
             el("small", {}, `Expected ${pct(o.net)} after spread (${pct(o.totalPct)} vs your original cost) · confidence ${o.confidence}${o.caution ? ` · note: ${o.caution}` : ""}`)),
           el("a", { href: calcLink(pos.B, o.C) }, "Open in calculator")));
       }

@@ -267,9 +267,17 @@
         const leg = Math.max(roundTripCost(pos.B, opts), C.key === DIVINE_KEY ? 0 : roundTripCost(C, opts)) / 2;
         const net = ((1 - leg) ** 2 * ratioMove - 1) * 100;
         const spikeC = spikeOf(C, opts.spikePct).now;
+        // The in-game exchange only trades whole numbers: work out the biggest whole amount of C you can get from
+        // whole units of B, then the fewest whole B that buys it.
+        const rateNet = pos.B.divine / C.divine * (1 - leg);
+        const giveMax = Math.floor(trade.get.qty + 1e-9);
+        const receive = Math.floor(giveMax * rateNet + 1e-9);
+        const feasible = receive >= 1;
+        const give = feasible ? Math.min(giveMax, Math.ceil(receive / rateNet - 1e-9)) : 0;
         out.push({
           C, net, gross: (ratioMove - 1) * 100,
-          receive: trade.get.qty * pos.B.divine / C.divine * (1 - leg),
+          receive, give, keep: Math.max(0, trade.get.qty - give), feasible,
+          receiveExact: trade.get.qty * rateNet,
           totalPct: (pos.nowInA * (1 - leg) ** 2 * ratioMove / trade.give.qty - 1) * 100,
           confidence: fC.confidence === "low" || fB.confidence === "low" ? "low" : fC.confidence === "medium" || fB.confidence === "medium" ? "medium" : "high",
           caution: spikeC < 0 ? "its price right now looks like a one-off dip, which can be a bad listing" : spikeC > 0 ? "its price right now looks like a one-off spike" : ""
@@ -277,7 +285,9 @@
       }
     }
     out.sort((a, b) => b.net - a.net);
-    return { pos, options: out.filter(o => o.net > 0).slice(0, n), all: out, basis: fB };
+    const profitable = out.filter(o => o.net > 0);
+    return { pos, options: profitable.filter(o => o.feasible).slice(0, n), all: out, basis: fB,
+      tooSmall: profitable.filter(o => !o.feasible).length };
   }
 
   // Alerts for the open positions. kind: "good" | "bad" | "info".

@@ -18,10 +18,12 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       # The "data" branch holds only the latest data files. It is rewritten as one commit each run,
       # so the repository never grows with history.
@@ -31,6 +33,8 @@ jobs:
           if git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
             git fetch --depth=1 origin data
             git archive FETCH_HEAD | tar -x -C data
+            # Only plain files are ever expected here; drop anything else (links) before it is used.
+            find data -type l -delete
           fi
 
       - name: Capture

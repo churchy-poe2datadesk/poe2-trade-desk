@@ -89,6 +89,8 @@ async function syncIcons({ outDir, state, fetchImpl, t, delayMs, ua }) {
 async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now(), delayMs = 1500 }) {
   const root = settings.apiRoot, ua = `PoE2-Data-Desk-Public-Tools/1.0 (hourly economy snapshot; contact: ${settings.contact})`;
   const state = await readJson(path.join(outDir, "state.json"), { etags: {}, categories: {} });
+  // Saved data from an older version lacks fields this version needs (icons): forget the ETags once so every category is fetched again.
+  if (state.schema !== 2) { state.etags = {}; state.schema = 2; }
   const history = await readJson(path.join(outDir, "history.json"), {});
   const t = now(), failures = [];
 

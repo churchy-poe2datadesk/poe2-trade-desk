@@ -32,7 +32,7 @@ h2{font:normal 20px Georgia,serif;margin:0 0 6px;color:var(--paper)}
 .xc-link{background:none;border:0;padding:0;margin-left:6px;color:var(--gold);font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
 .xc-note{margin:0 0 14px;color:var(--muted);font-size:13px}
 .xc-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-.xc-look{font-size:12px;color:var(--muted);margin-left:auto}
+.xc-look{font-size:12px;color:var(--muted);flex:1 1 100%;text-align:center;margin:6px 0 0}
 .xc-result{margin-top:14px;padding:12px 14px;border-radius:8px;background:var(--input);border:1px solid var(--line);font-size:14px;min-height:20px}
 .xc-result:empty{display:none}
 .xc-result.exact{border-color:var(--good)}
@@ -55,7 +55,7 @@ h2{font:normal 20px Georgia,serif;margin:0 0 6px;color:var(--paper)}
 .combo-item small{margin-left:auto;color:var(--muted);white-space:nowrap}
 .combo-item.active,.combo-item:hover{background:#2a2418}
 .combo-empty{padding:12px;color:var(--muted)}
-@media (max-width:760px){.xc-row{grid-template-columns:1fr}.xc-mid{order:-0}.xc-look{margin-left:0}}
+@media (max-width:760px){.xc-row{grid-template-columns:1fr}.xc-mid{order:-0}.xc-look{margin:6px 0 0}}
 .xc-ideas{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:14px}
 h3{font:600 12px Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;margin:0 0 8px}
 .xc-up{color:var(--buy)}.xc-down{color:var(--sell)}
@@ -158,4 +158,4 @@ h3{font:600 12px Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;
 .xc-nav-r{align-items:center;gap:12px}
 .xc-off{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid #6b5a2f;background:#2a2410;color:#ecc86a;font-size:12px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
 
-.pt-footer{margin:32px 0 8px;padding-top:14px;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}
+.pt-footer{margin:32px 0 8px;padding-top:14px;text-align:center;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}

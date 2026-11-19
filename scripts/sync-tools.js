@@ -33,7 +33,7 @@ for (const f of ["exchange.js", "ledger.js"]) {
 }
 write("tools-ui.js", read("tools-ui.js")); // the top bar reads window.REPORTS_URL (config.js) itself
 
-write("exchange.css", read("exchange.css") + "\n.pt-footer{margin:32px 0 8px;padding-top:14px;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}\n");
+write("exchange.css", read("exchange.css") + "\n.pt-footer{margin:32px 0 8px;padding-top:14px;text-align:center;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}\n");
 write("ledger.css", read("ledger.css"));
 
 let html = read("exchange.html");

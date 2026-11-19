@@ -11,6 +11,10 @@ const path = require("node:path");
 const { weekShape, swingProfile } = require("./lib/exchange-stats");
 
 const CATEGORIES = ["Currency", "Fragments", "Abyss", "UncutGems", "LineageSupportGems", "Essences", "SoulCores", "Idols", "Runes", "Ritual", "Expedition", "Delirium", "Breach", "Verisium"];
+// Unique gear (poe.ninja's item overview) moves slowly and has no trading volume, so it is captured every 12 hours,
+// not every run, and published without swing statistics.
+const ITEM_CATEGORIES = ["UniqueWeapons", "UniqueArmours", "UniqueAccessories", "UniqueFlasks", "UniqueCharms", "UniqueJewels", "UniqueSanctumRelics", "UniqueTablets", "PrecursorTablets"];
+const ITEM_EVERY_MS = 12 * 3600 * 1000, ITEM_JITTER_MS = 30 * 60 * 1000;
 const num = v => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 // Published numbers are rounded to what the tools need (a swap is never decided on the sixth digit), which keeps the
 // file small and means it is processed data, not a verbatim copy of poe.ninja's figures.
@@ -23,6 +27,17 @@ async function writeJson(file, data) {
   const tmp = `${file}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(data));
   await fs.rename(tmp, file);
+}
+
+function itemLineSummary(data) {
+  const seen = new Set();
+  return data.lines.filter(l => l && typeof l === "object").map(l => {
+    const spark = l.sparkline || l.sparkLine || null;
+    return {
+      id: String(l.detailsId || l.itemId || l.id || l.name || ""), name: String(l.name || l.baseType || ""), i: typeof l.icon === "string" ? l.icon : null,
+      v: num(l.primaryValue), a: num(l.listingCount), s: spark ? { total: num(spark.totalChange), data: Array.isArray(spark.data) ? spark.data.map(num) : [] } : null
+    };
+  }).filter(l => l.id && l.name && !seen.has(l.id) && seen.add(l.id));
 }
 
 function lineSummary(data) {
@@ -129,7 +144,7 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
   if (!league) throw new Error(`poe.ninja does not list the league "${wanted}".`);
   // A new league starts clean: another league's prices must never feed this league's history or statistics.
   if (state.league && state.league.name !== league.name) {
-    state.categories = {}; state.etags = { leagues: state.etags.leagues }; state.iconFail = {};
+    state.categories = {}; state.etags = { leagues: state.etags.leagues }; state.iconFail = {}; delete state.itemsAt;
     for (const key of Object.keys(history)) delete history[key];
     console.log(`League changed from ${state.league.name} to ${league.name}: history and saved prices reset.`);
   }
@@ -151,6 +166,26 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
     await sleep(delayMs);
   }
 
+  // Unique gear: only when 12 hours have passed since the last full item capture (a failed category is retried next run).
+  if (settings.uniqueItems !== false && (!state.itemsAt || t - state.itemsAt >= ITEM_EVERY_MS - ITEM_JITTER_MS)) {
+    let ok = 0;
+    for (const category of ITEM_CATEGORIES) {
+      try {
+        const url = new URL(`${root}/stash/current/item/overview`);
+        url.searchParams.set("league", league.id); url.searchParams.set("type", category);
+        const got = await get(url.toString(), `cat:${category}`);
+        if (!got.notModified) {
+          if (!got.body || !Array.isArray(got.body.lines)) throw new Error("unexpected response");
+          state.categories[category] = { at: new Date(t).toISOString(), unique: true, lines: itemLineSummary(got.body) };
+          fresh++;
+        }
+        ok++;
+      } catch (error) { failures.push(`${category}: ${error.message}`); delete state.etags[`cat:${category}`]; }
+      await sleep(delayMs);
+    }
+    if (ok === ITEM_CATEGORIES.length) state.itemsAt = t;
+  }
+
   // History: one point per change (price or volume), newest historyDays only.
   const cutoff = Math.floor(t / 1000) - settings.historyDays * 86400;
   for (const category of Object.keys(state.categories)) {
@@ -158,7 +193,8 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
     for (const line of state.categories[category].lines) {
       if (!(line.v > 0)) continue;
       const key = `${category}:${line.id}`, list = history[key] || (history[key] = []), last = list[list.length - 1];
-      if (!last || last[1] !== line.v || last[2] !== line.a) if (!last || last[0] < at) list.push([at, line.v, line.a]);
+      const unique = !!state.categories[category].unique; // gear: listing counts change constantly, so only a new price is a point
+      if (!last || last[1] !== line.v || (!unique && last[2] !== line.a)) if (!last || last[0] < at) list.push([at, line.v, line.a]);
     }
   }
   // Keep one point from before the cutoff: it is the price at the start of the window (still valid until the next change).
@@ -185,9 +221,10 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
       const spark7 = line.s ? { total: line.s.total, data: line.s.data } : null;
       const iconFile = line.i && iconFiles.get(iconId(line.i));
       const shape = weekShape(line.v, spark7) || {};
-      items.push({ key: `${category}:${line.id}`, name: line.name, category, ...(iconFile ? { icon: `/icons/${iconFile}` } : {}), divine: sig(line.v, 6), activity: Math.round(Number(line.a) || 0), ...shape,
+      const unique = !!snap.unique;
+      items.push({ key: `${category}:${line.id}`, name: line.name, category, ...(unique ? { kind: "unique", listings: Math.round(Number(line.a) || 0) } : {}), ...(iconFile ? { icon: `/icons/${iconFile}` } : {}), divine: sig(line.v, 6), activity: unique ? 0 : Math.round(Number(line.a) || 0), ...shape,
         change7: Number.isFinite(spark7 && spark7.total) ? Math.round(spark7.total * 100) / 100 : null,
-        ...("recent3" in shape ? { recent3: sig(shape.recent3, 4), avg7: sig(shape.avg7, 5) } : {}), prof: swingProfile(points, line.v) });
+        ...("recent3" in shape ? { recent3: sig(shape.recent3, 4), avg7: sig(shape.avg7, 5) } : {}), prof: unique ? null : swingProfile(points, line.v) });
     }
   }
   if (!items.length) throw new Error(`No market data captured (${failures.join("; ") || "nothing returned"}).`);
@@ -199,7 +236,7 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
   return { items: items.length, fresh, failures };
 }
 
-module.exports = { run, CATEGORIES };
+module.exports = { run, CATEGORIES, ITEM_CATEGORIES };
 
 if (require.main === module) {
   (async () => {

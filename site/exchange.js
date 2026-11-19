@@ -60,7 +60,10 @@ function reducedPair(ratio) { return { left: ratio.d, right: ratio.n }; } // lef
 // ---------- page ----------
 if (typeof document !== "undefined") {
   const $ = id => document.getElementById(id);
-  const state = { items: [], left: null, right: null, active: null, zeroNote: "" };
+  const state = { items: [], left: null, right: null, active: null, zeroNote: "", itemMode: false };
+  const isUnique = i => !!i && i.kind === "unique";
+  // Item mode: the left side is a unique item and the right side a currency. Currency mode hides uniques on both sides.
+  const allowed = (side, i) => (state.itemMode && side === "left") ? isUnique(i) : !isUnique(i);
 
   const initials = name => name.replace(/[^A-Za-z ]/g, "").split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join("").toUpperCase() || "?";
   const marketText = v => { const n = Number(v); return n >= 100 ? n.toFixed(1).replace(/\.0$/, "") : Number(n.toPrecision(5)).toFixed(8).replace(/0+$/, "").replace(/\.$/, ""); };
@@ -84,7 +87,7 @@ if (typeof document !== "undefined") {
 
     const render = () => {
       const q = search.value.trim().toLowerCase();
-      shown = state.items.filter(i => !q || i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q));
+      shown = state.items.filter(i => allowed(side, i) && (!q || i.name.toLowerCase().includes(q) || i.category.toLowerCase().includes(q)));
       list.textContent = "";
       if (!shown.length) { const li = document.createElement("li"); li.className = "combo-empty"; li.textContent = "No match."; list.append(li); return; }
       index = Math.min(index, shown.length - 1);
@@ -177,6 +180,27 @@ if (typeof document !== "undefined") {
   function fromLeft() { const l = readQty("left-qty"), r = readRatio(); if (l && r) $("right-qty").value = plain(mul(l, r)); summary(); }
   function fromRight() { const rt = readQty("right-qty"), r = readRatio(); if (rt && r) $("left-qty").value = plain(div(rt, r)); summary(); }
   function onRatio() { showResult("", ""); fromLeft(); }
+  function setItemMode(on, quiet) {
+    state.itemMode = !!on;
+    $("mode-cur").classList.toggle("active", !on); $("mode-cur").setAttribute("aria-pressed", String(!on));
+    $("mode-item").classList.toggle("active", !!on); $("mode-item").setAttribute("aria-pressed", String(!!on));
+    $("mode-note").hidden = !on;
+    $("left-label").textContent = on ? "Item you sell" : "You give";
+    $("right-label").textContent = on ? "Currency you want" : "You get";
+    if (quiet) return;
+    const find = key => state.items.find(i => i.key === key);
+    if (on) {
+      state.left = state.items.find(isUnique) || state.left;
+      if (isUnique(state.right)) state.right = find("Currency:divine");
+      $("left-qty").value = "1";
+    } else {
+      if (isUnique(state.left)) state.left = find("Currency:divine") || state.items.find(i => !isUnique(i));
+      if (isUnique(state.right)) state.right = find("Currency:chaos") || state.items.find(i => !isUnique(i));
+    }
+    leftCombo.paint(); rightCombo.paint(); onCurrencyChange();
+  }
+  function offerItemMode() { $("xc-modes").hidden = !state.items.some(isUnique); }
+
   function onCurrencyChange() {
     if (state.left && state.right) $("ratio").value = marketText(state.left.divine / state.right.divine);
     showResult("", ""); fromLeft();
@@ -265,11 +289,11 @@ if (typeof document !== "undefined") {
     host.textContent = "";
     const p = item.prof, perQ = v => v / quote.divine;
     let pts = [], source;
-    if (p && p.series && p.series.length >= 6 && p.spanH >= 48) { pts = p.series.map(([t, v]) => ({ t: t * 1000, v })); source = `Price at each of your captures over ${(p.spanH / 24).toFixed(1)} days`; }
+    if (p && p.series && p.series.length >= 6 && p.spanH >= 48) { pts = p.series.map(([t, v]) => ({ t: t * 1000, v })); source = `Price at each capture over ${(p.spanH / 24).toFixed(1)} days`; }
     else if (MM.weekPoints(item).length >= 4) {
       const end = capturedAt ? new Date(capturedAt).getTime() : Date.now(), len = item.week.length;
       pts = MM.weekPoints(item).map(pt => ({ t: end - (len - 1 - pt.i) * 86400000, v: pt.v }));
-      source = "Last 7 days from poe.ninja's own trend (your own captures cover too little time to draw yet)";
+      source = "Last 7 days from poe.ninja's own trend (the captured history is too short to draw yet)";
     }
     if (pts.length < 2) { const m = document.createElement("p"); m.className = "xc-chart-cap"; m.textContent = "No price history to graph yet."; host.append(m); return; }
     const NS = "http://www.w3.org/2000/svg", W = 600, H = 220, L = 58, R = 14, T = 12, B = 28;
@@ -452,7 +476,7 @@ if (typeof document !== "undefined") {
       const found = state.items.filter(matches);
       const inLists = new Set([...lists.buy, ...lists.sell].filter(e => matches(e.item)).map(e => e.item.key));
       const say = html => { const p = document.createElement("div"); p.innerHTML = html; msg.append(p); };
-      if (!found.length) say(`<strong>“${esc($("flip-search").value.trim())}”</strong> is not in your captured poe.ninja data, so it can't appear in these lists.`);
+      if (!found.length) say(`<strong>“${esc($("flip-search").value.trim())}”</strong> is not in the captured poe.ninja data, so it can't appear in these lists.`);
       else {
         const missing = found.filter(i => !inLists.has(i.key));
         if (!missing.length) say(`${found.length} match${found.length === 1 ? "" : "es"} for <strong>“${esc($("flip-search").value.trim())}”</strong>, all shown below.`);
@@ -465,7 +489,7 @@ if (typeof document !== "undefined") {
             const eb = MM.edgeOf(item, "buy", opts), es = MM.edgeOf(item, "sell", opts);
             why = !eb.usual ? eb.reason : `buying: ${eb.reason}; selling: ${es.reason}`;
           }
-          say(`<strong>${esc(item.name)}</strong> is in your data but not listed: ${esc(why)}.`);
+          say(`<strong>${esc(item.name)}</strong> is in the data but not listed: ${esc(why)}.`);
         }
         if (missing.length > 6) say(`…and ${missing.length - 6} more matches that are not candidates.`);
       }
@@ -484,6 +508,7 @@ if (typeof document !== "undefined") {
       state.items = data.items.sort((a, b) => order(a.category).localeCompare(order(b.category)) || b.divine - a.divine);
       state.left = state.items.find(i => i.key === l) || state.items[0];
       state.right = state.items.find(i => i.key === r) || state.items[1];
+      offerItemMode();
       leftCombo.paint(); rightCombo.paint(); onCurrencyChange(); renderIdeas();
       const when = data.capturedAt ? new Date(data.capturedAt).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }) : "unknown time";
       $("xc-meta").textContent = `${state.items.length} currencies from ${data.source === "snapshot" ? "a saved poe.ninja snapshot" : "the latest poe.ninja capture"} (${when}). Refreshes itself.`;
@@ -509,6 +534,9 @@ if (typeof document !== "undefined") {
       const q = new URLSearchParams(location.search); // ?left=Currency:divine&right=Currency:chaos&ratio=1.564
       if (find(q.get("left"))) state.left = find(q.get("left"));
       if (find(q.get("right"))) state.right = find(q.get("right"));
+      offerItemMode();
+      if (isUnique(state.left)) setItemMode(true, true);
+      else if (isUnique(state.right)) state.right = find("Currency:chaos");
       if (q.get("ratio") && /^[0-9.,]+$/.test(q.get("ratio"))) $("ratio").value = q.get("ratio");
       leftCombo.paint(); rightCombo.paint();
       const when = data.capturedAt ? new Date(data.capturedAt).toLocaleString("en-AU", { timeZone: "Australia/Melbourne", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true }) : "unknown time";
@@ -526,6 +554,8 @@ if (typeof document !== "undefined") {
     if (!settingsState) return;
     window.ToolsUI.openSettings(settingsState, values => { if (window.Ledger) window.Ledger.applySettings(settingsState, values); opts = MM.optionsFrom(values); state.items.forEach(i => { delete i._spike; }); renderIdeas(); });
   });
+  $("mode-cur").addEventListener("click", () => { if (state.itemMode) setItemMode(false); });
+  $("mode-item").addEventListener("click", () => { if (!state.itemMode) setItemMode(true); });
   try { $("free-entry").checked = localStorage.getItem(FREE_KEY) !== "0"; } catch { /* default: on */ }
   $("free-entry").addEventListener("change", () => { try { localStorage.setItem(FREE_KEY, $("free-entry").checked ? "1" : "0"); } catch { /* kept for this page */ } summary(); });
   $("left-qty").addEventListener("input", () => (freeEntry() ? summary() : fromLeft()));

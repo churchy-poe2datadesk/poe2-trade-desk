@@ -246,12 +246,28 @@
     return out;
   }
 
+  // A drop is something found in game (no trade, no cost): { id, ts, key, qty, note, sold: null | { divine, ts } }.
+  // Everything it is worth now is profit, so it is valued at today's price and checked against its usual price.
+  function valueDrop(drop, map, opts = DEFAULT_OPTIONS) {
+    const B = map.get(drop.key);
+    if (!B || !(B.divine > 0)) return null;
+    const leg = roundTripCost(B, opts) / 2;
+    const F = usualPrice(B, opts);
+    const nowDivine = drop.qty * B.divine;
+    return {
+      B, nowDivine, netDivine: nowDivine * (1 - leg), usual: F, usualDivine: F > 0 ? drop.qty * F : null,
+      premiumB: F > 0 ? B.divine / F : null,
+      exitShare: B.activity > 0 ? nowDivine / B.activity : null
+    };
+  }
+
   // Best swaps for the held currency B. Each side is expected to close `phi` of its gap to its usual level;
   // you swap now and swap back later, paying a leg of cost each time. The target must be able to absorb the
   // position (daily volume at least twice its value).
   function swapOptions(trade, map, items, opts = DEFAULT_OPTIONS, n = 3) {
     const pos = valuePosition(trade, map, opts);
     if (!pos) return { pos: null, options: [], all: [] };
+    if (pos.B.kind === "unique") return { pos, options: [], all: [], unique: true }; // uniques have no exchange to swap on
     const fB = fairValue(pos.B, opts), out = [];
     if (fB.F > 0) {
       const bFuture = pos.B.divine + fB.phi * (fB.F - pos.B.divine);
@@ -291,8 +307,24 @@
   }
 
   // Alerts for the open positions. kind: "good" | "bad" | "info".
-  function alertsFor(trades, map, items, opts = DEFAULT_OPTIONS) {
+  function alertsFor(trades, map, items, opts = DEFAULT_OPTIONS, drops = []) {
     const alerts = [];
+    for (const drop of drops) {
+      if (drop.sold) continue;
+      const v = valueDrop(drop, map, opts);
+      if (!v) continue;
+      const name = v.B.name, id = drop.id;
+      if (v.premiumB !== null && (v.premiumB - 1) * 100 >= opts.sellWindowPct) {
+        alerts.push({ id: `${id}:dropsell`, tradeId: id, kind: "good", title: `Good time to sell your ${name} drop`,
+          detail: `${name} is ${((v.premiumB - 1) * 100).toFixed(0)}% above its usual price. Your ${drop.qty} would fetch about ${v.netDivine.toFixed(2)} Divine after the buy/sell gap, all of it profit.` });
+      }
+      if (v.B.kind === "unique") { /* priced from listings: no volume to judge */ } else if (!(v.B.activity > 0)) {
+        alerts.push({ id: `${id}:dropdead`, tradeId: id, kind: "bad", title: `${name} has no recent trading`, detail: `poe.ninja shows no trading volume for it in the latest capture, so your drop may be hard to sell.` });
+      } else if (v.exitShare !== null && v.exitShare > 0.25) {
+        alerts.push({ id: `${id}:dropsize`, tradeId: id, kind: "bad", title: `Your ${name} drop is a big share of its daily trading`,
+          detail: `It is about ${(v.exitShare * 100).toFixed(0)}% of a day's volume, so selling it all at once may move the price against you.` });
+      }
+    }
     for (const trade of trades) {
       if (trade.closed) continue;
       const { pos, options } = swapOptions(trade, map, items, opts, 3);
@@ -315,7 +347,7 @@
             detail: `If it works out the position would end about ${best.totalPct >= 0 ? "+" : ""}${best.totalPct.toFixed(0)}% vs what you paid (confidence ${best.confidence}).`, swapTo: best.C.key });
         }
       }
-      if (!(pos.B.activity > 0)) {
+      if (pos.B.kind === "unique") { /* priced from listings: no volume to judge */ } else if (!(pos.B.activity > 0)) {
         alerts.push({ id: `${id}:dead`, tradeId: id, kind: "bad", title: `${name} has no recent trading`, detail: `poe.ninja shows no trading volume for it in the latest capture, so you may struggle to sell it.` });
       } else if (pos.B.activity < opts.minVolumeDiv) {
         alerts.push({ id: `${id}:thin`, tradeId: id, kind: "bad", title: `${name} is not trading much`, detail: `It trades under ${opts.minVolumeDiv} Divine a day, so it may be slow or costly to sell.` });
@@ -376,6 +408,6 @@
 
   return {
     TOOL_SETTINGS, DEFAULT_OPTIONS, optionsFrom, median, theilSen, spikeFlags, weekPoints, fairValue, usualPrice, spikeOf, edgeOf,
-    liquidPool, looseVolume, barVolume, tierOf, BARS, liquidityScore, roundTripCost, sigmaOf, scoreOf, byKey, valuePosition, swapOptions, alertsFor, loadMarket, getMode, setMode, loadSettings, saveSettings
+    liquidPool, looseVolume, barVolume, tierOf, BARS, liquidityScore, roundTripCost, sigmaOf, scoreOf, byKey, valuePosition, valueDrop, swapOptions, alertsFor, loadMarket, getMode, setMode, loadSettings, saveSettings
   };
 });

@@ -61,6 +61,21 @@
     </form>
   </details>
   </section>
+  <section class="xc-card" aria-label="Drops">
+    <h2>Drops</h2>
+    <p class="xc-note">Found something in game? Enter what it is and how many. It costs nothing, so everything it is worth is profit. The ledger watches its price and tells you when it is above its usual level, a good time to sell.</p>
+    <form id="drop-form" class="lg-form" autocomplete="off">
+      <label class="lg-field"><span class="xc-label">What dropped</span>
+        <input id="drop-name" class="xc-input lg-text" list="item-names" placeholder="e.g. Divine Orb" required>
+        <input id="drop-qty" class="xc-input" inputmode="decimal" placeholder="Amount" value="1" required></label>
+      <label class="lg-field lg-wide"><span class="xc-label">Note (optional)</span>
+        <input id="drop-note" class="xc-input lg-text" maxlength="120" placeholder="Where it dropped"></label>
+      <div class="xc-actions"><button class="xc-btn xc-primary" type="submit">Add drop</button><span id="drop-msg" class="xc-set-msg"></span></div>
+    </form>
+    <div id="drops" class="lg-list"></div>
+    <h3 class="lg-h">Sold drops</h3>
+    <div id="drops-sold" class="lg-list"></div>
+  </section>
   <section class="xc-card" aria-label="Closed trades">
     <h2>Closed positions</h2>
     <div id="closed" class="lg-list"></div>
@@ -93,9 +108,14 @@
   <div class="xc-col" id="col-calc" aria-label="Exchange Calculator">
     <h2 class="xc-col-h">Exchange Calculator</h2>
   <section class="xc-card" aria-label="Exchange">
+    <div class="xc-modes" id="xc-modes" role="group" aria-label="What are you trading?" hidden>
+      <button id="mode-cur" class="xc-modebtn active" type="button" aria-pressed="true">Swap currencies</button>
+      <button id="mode-item" class="xc-modebtn" type="button" aria-pressed="false">Sell an item</button>
+    </div>
+    <p id="mode-note" class="xc-note" hidden>Unique item prices are what poe.ninja sees listed (there is no sales volume for gear), so they show what others ask, not a guaranteed sale. Selling an item happens on the trade site; use this to see whether your price is above or below the going rate.</p>
     <div class="xc-row">
       <div class="xc-side">
-        <label class="xc-label" for="left-qty">You give</label>
+        <label class="xc-label" id="left-label" for="left-qty">You give</label>
         <div class="combo" id="combo-left"></div>
         <input id="left-qty" class="xc-input" inputmode="decimal" autocomplete="off" value="1" aria-label="Amount you give">
       </div>
@@ -108,7 +128,7 @@
       </div>
 
       <div class="xc-side">
-        <label class="xc-label" for="right-qty">You get</label>
+        <label class="xc-label" id="right-label" for="right-qty">You get</label>
         <div class="combo" id="combo-right"></div>
         <input id="right-qty" class="xc-input" inputmode="decimal" autocomplete="off" value="1.564" aria-label="Amount you get">
       </div>
@@ -176,6 +196,7 @@
         <h3>Where the numbers come from</h3>
         <dl>
           <dt>Prices</dt><dd>Taken from poe.ninja's currency and item economy data, which updates about once an hour for Path of Exile 2. Every price is converted to Divine Orb equivalents so different currencies can be compared. The time of the latest update is shown at the top of the page.</dd>
+          <dt>Unique items</dt><dd>Unique gear is priced from poe.ninja's item data, which is checked about every 12 hours because it moves slowly. It has listing counts, not trading volume, so prices show what is asked, not what sold. Gear works in the calculator (Sell an item), drops and positions, but is not part of the ranked swap lists.</dd>
           <dt>Daily volume</dt><dd>poe.ninja's estimate of how much of an item traded per day, counted in Divine Orbs. Busy items (1000+ Divine a day) have tight, reliable prices. Quiet items (under 100) can swing a lot on a few sales, so they are treated more cautiously throughout.</dd>
           <dt>Softcore and Hardcore</dt><dd>Each has its own market and its own prices. The switch in the top bar changes every number on the page.</dd>
         </dl>

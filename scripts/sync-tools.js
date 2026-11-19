@@ -26,7 +26,6 @@ write("market-model.js", patch(read("market-model.js"), "market-model.js", [
 ]));
 for (const f of ["exchange.js", "ledger.js"]) {
   write(f, patch(read(f), f, [
-    ["your latest poe.ninja capture", "the latest poe.ninja capture"],
     ["Is the Data Desk backend running?", "Please try again in a few minutes."],
     ["(local backend only; it never contacts poe.ninja)", "(this page only reads the published data file; it never contacts poe.ninja)"]
   ]).split("/exchange?").join("/tradedesk?").split("a[href^='/exchange?']").join("a[href^='/tradedesk?']"));

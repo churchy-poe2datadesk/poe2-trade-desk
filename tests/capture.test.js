@@ -3,9 +3,9 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { run, CATEGORIES } = require("../scripts/capture");
+const { run, CATEGORIES, ITEM_CATEGORIES } = require("../scripts/capture");
 
-const settings = { leagueName: "Forbidden Rites", contact: "me@example.com", apiRoot: "https://poe.ninja/poe2/api/economy", historyDays: 30 };
+const settings = { leagueName: "Forbidden Rites", contact: "me@example.com", apiRoot: "https://poe.ninja/poe2/api/economy", historyDays: 30, uniqueItems: false };
 const out = fs.mkdtempSync(path.join(os.tmpdir(), "pt-"));
 const calls = [];
 let price = 100, etagN = 0, failCategory = null, notModified = false;
@@ -115,6 +115,36 @@ const fakeFetch = async (url, opts) => {
     assert.equal(m("market.json").league, "Forbidden Rites"); assert.equal(m("market-hc.json").league, "HC Forbidden Rites"); assert.equal(m("market-hc.json").mode, "hc");
     assert.ok(fs.existsSync(path.join(hcOut, "history-hc.json")) && fs.existsSync(path.join(hcOut, "state-hc.json")) && hc.items === sc.items);
     await assert.rejects(run({ outDir: hcOut, settings: { ...settings, hardcoreLeagueName: "HC Missing" }, fetchImpl: fakeFetch, delayMs: 0, mode: "hc" }), /does not list the league "HC Missing"/);
+  }
+  // Unique gear: captured on the first run, then only after 12 hours; no volume, no swing statistics, price-only history.
+  {
+    const gOut = fs.mkdtempSync(path.join(os.tmpdir(), "pt-gear-")), gSettings = { ...settings, uniqueItems: true };
+    let gearPrice = 40, stashCalls = 0;
+    const gearFetch = async (url, opts) => {
+      if (!String(url).includes("/stash/current/item/overview")) return fakeFetch(url, opts);
+      stashCalls++;
+      const type = new URL(url).searchParams.get("type");
+      const lines = [{ id: 1, name: `Sword of ${type}`, detailsId: `sword-${type}`, icon: "https://web.poecdn.com/gen/image/sword.png", primaryValue: gearPrice, listingCount: 12 + stashCalls, sparkline: { totalChange: 3, data: [0, 1, 2, 3, 3, 3, 3] } },
+        { id: 2, name: `Sword of ${type}`, detailsId: `sword-${type}`, primaryValue: 5, listingCount: 1 }]; // a repeated id is ignored
+      return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ lines }) };
+    };
+    const at = h => () => Date.UTC(2026, 10, 18, h);
+    await run({ outDir: gOut, settings: gSettings, fetchImpl: gearFetch, now: at(0), delayMs: 0 });
+    assert.equal(stashCalls, ITEM_CATEGORIES.length, "every gear category fetched on the first run");
+    let gm = JSON.parse(fs.readFileSync(path.join(gOut, "market.json"), "utf8"));
+    const sword = gm.items.find(i => i.key === "UniqueWeapons:sword-UniqueWeapons");
+    assert.ok(sword && sword.kind === "unique" && sword.activity === 0 && sword.listings > 0 && sword.divine === 40 && sword.prof === null, "gear: no volume, listings kept apart, no swing profile");
+    assert.equal(gm.items.filter(i => i.key === "UniqueWeapons:sword-UniqueWeapons").length, 1, "repeated gear id kept once");
+    assert.ok(gm.items.some(i => i.key === "Currency:divine" && !i.kind), "currency is not marked as gear");
+    stashCalls = 0; gearPrice = 50;
+    await run({ outDir: gOut, settings: gSettings, fetchImpl: gearFetch, now: at(6), delayMs: 0 });
+    assert.equal(stashCalls, 0, "gear is not fetched again within 12 hours");
+    await run({ outDir: gOut, settings: gSettings, fetchImpl: gearFetch, now: at(12), delayMs: 0 });
+    assert.equal(stashCalls, ITEM_CATEGORIES.length, "gear fetched again after 12 hours");
+    const gh = JSON.parse(fs.readFileSync(path.join(gOut, "history.json"), "utf8"));
+    assert.equal(gh["UniqueWeapons:sword-UniqueWeapons"].length, 2, "gear history grows only when the price changes");
+    stashCalls = 0; await run({ outDir: gOut, settings: { ...gSettings, uniqueItems: false }, fetchImpl: gearFetch, now: at(30), delayMs: 0 });
+    assert.equal(stashCalls, 0, "gear capture can be switched off");
   }
   console.log("public-tools capture: all checks passed");
 })().catch(e => { console.error(e); process.exit(1); });

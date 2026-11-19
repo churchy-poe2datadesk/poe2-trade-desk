@@ -5,7 +5,7 @@
   const MM = window.MarketModel;
   const $ = id => document.getElementById(id);
   const STORE = "poe2dd.ledger.v1", SEEN = "poe2dd.ledger.seen";
-  const state = { items: [], map: new Map(), opts: MM.DEFAULT_OPTIONS, settings: null, trades: [], capturedAt: null, source: "live", league: "" };
+  const state = { items: [], map: new Map(), opts: MM.DEFAULT_OPTIONS, settings: null, trades: [], drops: [], capturedAt: null, source: "live", league: "" };
 
   // ---------- small helpers ----------
   const el = (tag, attrs = {}, ...kids) => {
@@ -41,16 +41,27 @@
   function loadTrades() {
     try {
       const j = JSON.parse(localStorage.getItem(storeKey()) || "{}");
+      state.drops = Array.isArray(j.drops) ? j.drops.filter(validDrop).slice(0, MAX_DROPS) : [];
       return Array.isArray(j.trades) ? j.trades.filter(validTrade) : [];
-    } catch { return []; }
+    } catch { state.drops = []; return []; }
   }
-  function saveTrades() { try { localStorage.setItem(storeKey(), JSON.stringify({ version: 1, trades: state.trades })); } catch { /* storage blocked: kept in memory only */ } }
-  const MAX_QTY = 1e12, MAX_TRADES = 5000;
+  function saveTrades() { try { localStorage.setItem(storeKey(), JSON.stringify({ version: 1, trades: state.trades, drops: state.drops })); } catch { /* storage blocked: kept in memory only */ } }
+  const MAX_QTY = 1e12, MAX_TRADES = 5000, MAX_DROPS = 2000;
   const goodQty = q => typeof q === "number" && Number.isFinite(q) && q > 0 && q <= MAX_QTY; // JSON like 1e999 becomes Infinity
   function validTrade(t) {
     return t && typeof t.id === "string" && t.give && t.get && typeof t.give.key === "string" && typeof t.get.key === "string"
       && goodQty(Number(t.give.qty)) && goodQty(Number(t.get.qty)) && Number.isFinite(Date.parse(t.ts));
   }
+
+  function validDrop(d) {
+    return d && typeof d.id === "string" && typeof d.key === "string" && goodQty(Number(d.qty)) && Number.isFinite(Date.parse(d.ts))
+      && (!d.sold || (goodQty(Number(d.sold.divine)) && Number.isFinite(Date.parse(d.sold.ts))));
+  }
+  const cleanDrop = d => ({
+    id: String(d.id).slice(0, 40), ts: new Date(d.ts).toISOString(), key: String(d.key).slice(0, 120), qty: Number(d.qty),
+    note: typeof d.note === "string" ? d.note.slice(0, 120) : "",
+    sold: d.sold ? { divine: Number(d.sold.divine), ts: new Date(d.sold.ts).toISOString() } : null
+  });
 
   // ---------- item pickers ----------
   const labels = new Map(); // label (lowercase) -> item
@@ -108,6 +119,18 @@
     saveTrades(); msg.textContent = "";
     for (const id of ["give-name", "give-qty", "get-name", "get-qty", "trade-ratio", "trade-note"]) $(id).value = "";
     setNow(); render(); updateHint();
+  }
+
+  function onDropSubmit(e) {
+    e.preventDefault();
+    const msg = $("drop-msg"), item = pick($("drop-name").value), qty = num($("drop-qty").value);
+    if (!item) { msg.textContent = "Choose the item from the list."; return; }
+    if (!(qty > 0) || qty > MAX_QTY) { msg.textContent = "Enter how many dropped."; return; }
+    if (state.drops.length >= MAX_DROPS) { msg.textContent = `The ledger holds at most ${MAX_DROPS} drops.`; return; }
+    state.drops.push({ id: uid(), ts: new Date().toISOString(), key: item.key, qty, note: $("drop-note").value.trim().slice(0, 120), sold: null });
+    saveTrades(); msg.textContent = "";
+    $("drop-name").value = ""; $("drop-qty").value = "1"; $("drop-note").value = "";
+    render();
   }
 
   // ---------- modal + toasts ----------
@@ -188,7 +211,7 @@
   }
 
   function positionCard(trade) {
-    const { pos, options, basis, tooSmall } = MM.swapOptions(trade, state.map, state.items, state.opts, 3);
+    const { pos, options, basis, tooSmall, unique } = MM.swapOptions(trade, state.map, state.items, state.opts, 3);
     const A = state.map.get(trade.give.key), B = state.map.get(trade.get.key);
     const card = el("div", { class: "lg-body" });
     card.append(el("p", { class: "lg-meta" }, `Paid ${fmt(trade.give.qty)} ${nameOf(trade.give.key)} on ${when(trade.ts)} · ratio ${fmt(trade.get.qty / trade.give.qty)} per 1${trade.note ? ` · “${trade.note}”` : ""}`));
@@ -209,7 +232,7 @@
         stat("Market ratio now", `${fmt(pos.marketRatio)} per 1`)));
       card.append(el("div", { class: "lg-h" }, "Top 3 swaps"));
       const ul = el("ul", { class: "lg-swaps" });
-      if (!options.length) ul.append(el("li", { class: "lg-empty" }, basis && !(basis.F > 0) ? `There is no reliable usual price for ${nameOf(trade.get.key)} yet (${basis.trending ? "its price has been trending" : "not enough history"}), so swap ideas are held back until there is.` : tooSmall ? `A swap looks profitable, but ${fmt(trade.get.qty)} ${nameOf(trade.get.key)} is too little to get even 1 whole unit of the other currency (the exchange only trades whole numbers). Hold until you have more, or sell it for something cheaper.` : "No swap looks profitable right now once trading costs are paid. Holding, or selling at a better time, may be wiser."));
+      if (!options.length) ul.append(el("li", { class: "lg-empty" }, unique ? "Swap ideas cover exchange currencies only. A unique is sold on the trade site, so watch its price against the usual level and list it when it is high." : basis && !(basis.F > 0) ? `There is no reliable usual price for ${nameOf(trade.get.key)} yet (${basis.trending ? "its price has been trending" : "not enough history"}), so swap ideas are held back until there is.` : tooSmall ? `A swap looks profitable, but ${fmt(trade.get.qty)} ${nameOf(trade.get.key)} is too little to get even 1 whole unit of the other currency (the exchange only trades whole numbers). Hold until you have more, or sell it for something cheaper.` : "No swap looks profitable right now once trading costs are paid. Holding, or selling at a better time, may be wiser."));
       for (const o of options) {
         ul.append(el("li", { class: "lg-swap" },
           el("span", {}, el("b", {}, `${nameOf(o.C.key)}`), ` · swap ${fmt(o.give)} ${nameOf(trade.get.key)} for about ${fmt(o.receive)}${o.keep > 0.0001 ? ` · keep ${fmt(o.keep)} ${nameOf(trade.get.key)}` : ""}`,
@@ -241,6 +264,74 @@
       });
       body.append(input, msg, el("div", { class: "lg-btns" }, ok));
     });
+  }
+
+  function dropCard(drop) {
+    const v = valueDropNow(drop), name = nameOf(drop.key);
+    const body = el("div", { class: "lg-body" });
+    body.append(el("p", { class: "lg-meta" }, `Found ${when(drop.ts)}${drop.note ? ` \u00b7 \u201c${drop.note}\u201d` : ""}`));
+    if (!v) {
+      body.append(el("p", { class: "lg-empty" }, `${name} is not in the latest poe.ninja capture, so this drop cannot be valued right now.`));
+    } else {
+      const chips = el("div", { class: "lg-chips" }), prem = v.premiumB;
+      if (prem !== null) chips.append(el("span", { class: `lg-chip ${prem >= 1 + state.opts.sellWindowPct / 100 ? "good" : prem <= 0.9 ? "warn" : ""}` }, `${name} is ${Math.abs((prem - 1) * 100).toFixed(0)}% ${prem >= 1 ? "above" : "below"} its usual price`));
+      if (prem !== null && prem >= 1 + state.opts.sellWindowPct / 100) chips.append(el("span", { class: "lg-chip good" }, "Sell window"));
+      const sp = MM.spikeOf(v.B, state.opts.spikePct).now; if (sp) chips.append(el("span", { class: "lg-chip warn" }, sp > 0 ? "Price spike right now" : "Price dip right now"));
+      body.append(chips);
+      const stat = (label, value) => el("div", {}, el("span", {}, label), el("strong", {}, value));
+      body.append(el("div", { class: "lg-grid" },
+        stat("Worth now (Divine)", fmt(v.nowDivine)),
+        stat(`After ${state.opts.exchangeSpreadPct}% spread`, fmt(v.netDivine)),
+        stat("Price now (Divine each)", fmt(v.B.divine)),
+        stat("Usual price (Divine each)", v.usual > 0 ? fmt(v.usual) : "-")));
+    }
+    const sell = el("button", { type: "button", class: "xc-btn" }, "Sold\u2026"), del = el("button", { type: "button", class: "xc-btn lg-danger" }, "Delete");
+    sell.addEventListener("click", () => sellDrop(drop, v));
+    del.addEventListener("click", () => { const go = () => removeDrop(drop, "Drop deleted", `${fmt(drop.qty)} ${name} was removed.`); if (confirmOn()) confirmBox("Delete this drop?", "This removes it from your ledger. It cannot be undone.", "Delete", go); else go(); });
+    body.append(el("div", { class: "lg-btns" }, sell, del));
+    const rowSell = el("button", { type: "button", class: "xc-btn lg-rowbtn" }, "Sold");
+    rowSell.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); sellDrop(drop, v); });
+    return collapsible(`drop:${drop.id}`, `${fmt(drop.qty)} ${name}`, `found ${when(drop.ts)}`, v ? `${fmt(v.nowDivine)} div` : "", "lg-pos", body,
+      [{ t: `${fmt(drop.qty)} ${name}` }, { t: v ? `${fmt(v.nowDivine)} div` : "-" }, { t: v && v.premiumB !== null ? pct((v.premiumB - 1) * 100) : "-", cls: v && v.premiumB !== null ? tone(v.premiumB - 1) : "" }, { node: rowSell }]);
+  }
+  const valueDropNow = drop => MM.valueDrop(drop, state.map, state.opts);
+  function removeDrop(drop, title, text) {
+    const before = state.drops.slice();
+    state.drops = state.drops.filter(x => x.id !== drop.id); saveTrades(); render();
+    if (!confirmOn()) toast("info", title, text, { label: "Undo", run: () => { state.drops = before; saveTrades(); render(); } });
+  }
+  function sellDrop(drop, v) {
+    openModal(body => {
+      body.append(el("h4", {}, "Sold this drop"), el("p", {}, `How much did you get for ${fmt(drop.qty)} ${nameOf(drop.key)}, in Divine Orbs? Everything counts as profit.`));
+      const input = el("input", { class: "xc-input", inputmode: "decimal", value: v ? fmt(v.netDivine) : "" });
+      const msg = el("p", { class: "xc-set-msg" });
+      const ok = el("button", { type: "button", class: "xc-btn xc-primary" }, "Mark sold");
+      ok.addEventListener("click", () => {
+        const q = num(input.value); if (!(q > 0) || q > MAX_QTY) { msg.textContent = "Enter an amount above zero."; return; }
+        drop.sold = { divine: q, ts: new Date().toISOString() }; saveTrades(); closeModal(); render();
+      });
+      body.append(input, msg, el("div", { class: "lg-btns" }, ok));
+    });
+  }
+  function renderDrops() {
+    const open = state.drops.filter(d => !d.sold).sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
+    const host = $("drops"); host.textContent = "";
+    host.classList.toggle("lg-table", view.mode === "list");
+    if (!open.length) host.append(el("p", { class: "lg-empty" }, "No drops yet. Add one above to start watching its price."));
+    else if (view.mode === "list") host.append(listHead(["Drop", "Worth now", "vs usual price", ""], [false, false, true]));
+    for (const d of open) host.append(dropCard(d));
+    const sold = state.drops.filter(d => d.sold).sort((a, b) => Date.parse(b.sold.ts) - Date.parse(a.sold.ts));
+    const sh = $("drops-sold"); sh.textContent = "";
+    if (!sold.length) { sh.append(el("p", { class: "lg-empty" }, "Nothing sold yet.")); return; }
+    let total = 0;
+    for (const d of sold) {
+      total += d.sold.divine;
+      const del = el("button", { type: "button", class: "xc-btn lg-danger" }, "Delete");
+      del.addEventListener("click", () => { const go = () => removeDrop(d, "Sold drop deleted", `${fmt(d.qty)} ${nameOf(d.key)} was removed.`); if (confirmOn()) confirmBox("Delete this sold drop?", "It cannot be undone.", "Delete", go); else go(); });
+      sh.append(collapsible(`dropsold:${d.id}`, `${fmt(d.qty)} ${nameOf(d.key)} \u2192 ${fmt(d.sold.divine)} div`, `sold ${when(d.sold.ts)}`, `+${fmt(d.sold.divine)} div`, "lg-pos",
+        el("div", { class: "lg-body" }, el("p", { class: "lg-meta" }, `Found ${when(d.ts)} \u00b7 sold ${when(d.sold.ts)}${d.note ? ` \u00b7 \u201c${d.note}\u201d` : ""}`), el("div", { class: "lg-btns" }, del))));
+    }
+    sh.prepend(el("p", { class: "lg-meta" }, `Earned from sold drops: ${fmt(total)} Divine.`));
   }
 
   function renderSummary() {
@@ -280,7 +371,7 @@
 
   let alerts = [];
   function renderAlerts() {
-    alerts = MM.alertsFor(state.trades, state.map, state.items, state.opts);
+    alerts = MM.alertsFor(state.trades, state.map, state.items, state.opts, state.drops);
     const count = $("bell-count"); count.textContent = String(alerts.length); count.className = "lg-count" + (alerts.length ? " has" : "");
     let seen = []; try { seen = JSON.parse(localStorage.getItem(SEEN) || "[]"); } catch { /* ignore */ }
     const fresh = alerts.filter(a => !seen.includes(a.id));
@@ -313,12 +404,12 @@
     host.classList.toggle("lg-table", view.mode === "list");
     if (open.length && view.mode === "list") host.append(listHead(["Position", "Paid", "Worth now", "Profit", "After spread", ""], [false, false, false, false, true]));
     for (const t of open) host.append(positionCard(t));
-    renderSummary(); renderClosed(); renderAlerts();
+    renderSummary(); renderDrops(); renderClosed(); renderAlerts();
   }
 
   // ---------- data tools ----------
   function exportData() {
-    const blob = new Blob([JSON.stringify({ app: "poe2-data-desk-ledger", version: 1, league: state.league, exportedAt: new Date().toISOString(), trades: state.trades }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ app: "poe2-data-desk-ledger", version: 1, league: state.league, exportedAt: new Date().toISOString(), trades: state.trades, drops: state.drops }, null, 2)], { type: "application/json" });
     const a = el("a", { href: URL.createObjectURL(blob), download: `trade-ledger-${new Date().toISOString().slice(0, 10)}.json` });
     document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
@@ -334,6 +425,9 @@
         note: typeof t.note === "string" ? t.note.slice(0, 120) : "",
         closed: t.closed && goodQty(Number(t.closed.qty)) && Number.isFinite(Date.parse(t.closed.ts)) ? { qty: Number(t.closed.qty), ts: new Date(t.closed.ts).toISOString() } : null
       }));
+      const haveDrop = new Set(state.drops.map(d => d.id));
+      const incomingDrops = (Array.isArray(parsed && parsed.drops) ? parsed.drops : []).filter(validDrop).map(cleanDrop).filter(d => !haveDrop.has(d.id) && haveDrop.add(d.id)).slice(0, Math.max(0, MAX_DROPS - state.drops.length));
+      state.drops.push(...incomingDrops);
       const have = new Set(state.trades.map(t => t.id));
       let added = incoming.filter(t => !have.has(t.id) && have.add(t.id)); // also skips an id repeated inside the file
       const room = Math.max(0, MAX_TRADES - state.trades.length);
@@ -341,7 +435,7 @@
       added = added.slice(0, room);
       state.trades.push(...added); saveTrades(); render();
       const other = parsed && typeof parsed.league === "string" && state.league && leagueSlug(parsed.league) !== state.league ? ` This backup is from a different league (${parsed.league.slice(0, 40)}); its trades are valued at the current league's prices.` : "";
-      msg.textContent = `Imported ${added.length} trade${added.length === 1 ? "" : "s"}${incoming.length - added.length - overflow ? ` (${incoming.length - added.length - overflow} already there)` : ""}.${other}${overflow ? ` ${overflow} more were skipped: the ledger holds at most ${MAX_TRADES} trades.` : ""}`;
+      msg.textContent = `Imported ${added.length} trade${added.length === 1 ? "" : "s"}${incomingDrops.length ? ` and ${incomingDrops.length} drop${incomingDrops.length === 1 ? "" : "s"}` : ""}${incoming.length - added.length - overflow ? ` (${incoming.length - added.length - overflow} already there)` : ""}.${other}${overflow ? ` ${overflow} more were skipped: the ledger holds at most ${MAX_TRADES} trades.` : ""}`;
     });
   }
 
@@ -398,6 +492,7 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshQuietly(); });
 
   $("trade-form").addEventListener("submit", onSubmit);
+  $("drop-form").addEventListener("submit", onDropSubmit);
   $("trade-ratio").addEventListener("input", syncFromRatio);
   $("give-qty").addEventListener("input", () => { if (num($("trade-ratio").value) > 0) syncFromRatio(); else if (num($("get-qty").value) > 0) syncFromGet(); });
   $("get-qty").addEventListener("input", syncFromGet);
@@ -408,8 +503,8 @@
   document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("lg-modal").hidden) closeModal(); });
   $("export").addEventListener("click", exportData);
   $("import").addEventListener("change", e => { importData(e.target.files[0]); e.target.value = ""; });
-  $("clear-closed").addEventListener("click", () => confirmBox("Clear closed positions?", "All closed trades are removed. Open positions stay.", "Clear closed", () => { state.trades = state.trades.filter(t => !t.closed); saveTrades(); render(); }));
-  $("clear-all").addEventListener("click", () => confirmBox("Clear the whole ledger?", "Every open and closed trade is removed from this browser. Export a backup first if you might want them.", "Clear everything", () => { state.trades = []; saveTrades(); try { localStorage.removeItem(SEEN); } catch { /* ignore */ } render(); }));
+  $("clear-closed").addEventListener("click", () => confirmBox("Clear closed positions?", "All closed trades and sold drops are removed. Open positions and unsold drops stay.", "Clear closed", () => { state.trades = state.trades.filter(t => !t.closed); state.drops = state.drops.filter(d => !d.sold); saveTrades(); render(); }));
+  $("clear-all").addEventListener("click", () => confirmBox("Clear the whole ledger?", "Every open and closed trade and every drop is removed from this browser. Export a backup first if you might want them.", "Clear everything", () => { state.trades = []; state.drops = []; saveTrades(); try { localStorage.removeItem(SEEN); } catch { /* ignore */ } render(); }));
   // The calculator beside the ledger drives Settings and the "Add to ledger" button.
   function addFromCalc(g, t) {
     const give = state.map.get(g.key), got = state.map.get(t.key);

@@ -198,5 +198,8 @@ h3{font:600 12px Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;
   .xc-gear-label{display:none}
   .xc-off{font-size:11px;padding:1px 8px}
 }
+.xc-modes{display:flex;gap:8px;margin:0 0 14px}.xc-modes[hidden]{display:none}
+.xc-modebtn{flex:1;background:var(--input);color:var(--muted);border:1px solid var(--line);border-radius:8px;padding:9px 10px;font:700 13px Arial,sans-serif;cursor:pointer}
+.xc-modebtn.active{color:var(--paper);border-color:var(--gold,#c8a66d);background:rgba(200,166,109,.14)}
 
 .pt-footer{margin:32px 0 8px;padding-top:14px;text-align:center;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}

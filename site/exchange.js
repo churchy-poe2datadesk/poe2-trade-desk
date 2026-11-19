@@ -550,6 +550,7 @@ if (typeof document !== "undefined") {
     if (!l || !r) return;
     state.left = l; state.right = r; leftCombo.paint(); rightCombo.paint(); onCurrencyChange();
     if (/^[0-9.,]+$/.test(ratio || "")) { $("ratio").value = ratio; fromLeft(); }
+    if (window.ToolsUI.showPanel) window.ToolsUI.showPanel("calc");
     $("col-calc").scrollIntoView({ behavior: "smooth", block: "start" });
   }
   // Links from the ledger ("Open in calculator") act on this page instead of leaving it.

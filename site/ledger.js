@@ -418,7 +418,7 @@
     if (!(g.qty > 0) || !(t.qty > 0)) return { ok: false, text: "Enter an amount on both sides first." };
     state.trades.push({ id: uid(), ts: new Date().toISOString(), give: { key: give.key, qty: g.qty }, get: { key: got.key, qty: t.qty }, note: "", closed: null });
     saveTrades(); render();
-    toast("good", "Added to ledger", `${fmt(g.qty)} ${give.name} for ${fmt(t.qty)} ${got.name}`, { label: "Show ledger", run: () => { $("col-ledger").scrollIntoView({ behavior: "smooth", block: "start" }); } });
+    toast("good", "Added to ledger", `${fmt(g.qty)} ${give.name} for ${fmt(t.qty)} ${got.name}`, { label: "Show ledger", run: () => { if (window.ToolsUI && window.ToolsUI.showPanel) window.ToolsUI.showPanel("ledger"); $("col-ledger").scrollIntoView({ behavior: "smooth", block: "start" }); } });
     return { ok: true, text: "Added to your ledger." };
   }
   window.Ledger = {

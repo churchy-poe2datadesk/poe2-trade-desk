@@ -31,7 +31,7 @@
     const league = el("span", { class: "xc-nav-league", id: "xc-nav-league" });
     const mid = el("span", { class: "xc-nav-mid" }, el("strong", {}, document.createTextNode("Trade Desk")), league, pick, tag);
 
-    const gear = el("button", { id: "open-settings", type: "button", class: "xc-btn xc-navbtn" }, document.createTextNode("\u2699 Settings"));
+    const gear = el("button", { id: "open-settings", type: "button", class: "xc-btn xc-navbtn", "aria-label": "Settings" }, document.createTextNode("\u2699"), el("span", { class: "xc-gear-label" }, document.createTextNode(" Settings")));
     const right = el("span", { class: "xc-nav-r" });
     // Discord invite: from config.js on the public site; from your Publishing setting when running offline.
     const addDiscord = url => {
@@ -44,6 +44,7 @@
     }
     right.append(el("a", { href: "https://poe.ninja", class: "xc-navlink xc-credit", rel: "noopener noreferrer", target: "_blank", title: "Market data comes from poe.ninja" }, document.createTextNode("Data: poe.ninja")), gear);
     host.append(left, mid, right);
+    if (current === "exchange") mountViews();
   }
   // Called once the market data is loaded: shows the league name in the bar ("HC Forbidden Rites" or "forbidden-rites-hc" become "Forbidden Rites").
   function setLeague(name) {
@@ -103,5 +104,83 @@
     reset.addEventListener("click", () => commit(collect(true)));
   }
 
-  window.ToolsUI = { mountNav, openSettings, setLeague };
+
+  // ---- Panel views: both side by side, one panel on its own page (?view=ledger or ?view=calculator),
+  // full screen, and on phones a Ledger / Calculator tab bar. ----
+  const NAMES = { ledger: "Trade Ledger", calc: "Exchange Calculator" };
+  const PARAM = { ledger: "ledger", calc: "calculator" };
+  const safeStore = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } } };
+  let views = null;
+
+  function mountViews() {
+    const cols = document.querySelector(".xc-cols");
+    if (!cols || views) return;
+    const panels = { ledger: document.getElementById("col-ledger"), calc: document.getElementById("col-calc") };
+    if (!panels.ledger || !panels.calc) return;
+    const fromUrl = new URL(location.href).searchParams.get("view");
+    const state = { only: fromUrl === "ledger" ? "ledger" : fromUrl === "calculator" ? "calc" : null, tab: safeStore.get("poe2dd.tab") === "ledger" ? "ledger" : "calc", enteredFullscreen: false };
+    const canFull = !!(document.fullscreenEnabled && document.documentElement.requestFullscreen);
+    const hrefFor = name => { const u = new URL(location.href); if (name) u.searchParams.set("view", PARAM[name]); else u.searchParams.delete("view"); return u.toString(); };
+    const buttons = {};
+
+    function paint() {
+      cols.classList.toggle("xc-only-ledger", state.only === "ledger");
+      cols.classList.toggle("xc-only-calc", state.only === "calc");
+      cols.dataset.tab = state.tab;
+      tabs.hidden = !!state.only;
+      for (const name of ["ledger", "calc"]) {
+        tabButtons[name].classList.toggle("on", state.tab === name);
+        tabButtons[name].setAttribute("aria-selected", String(state.tab === name));
+        const b = buttons[name];
+        b.pop.hidden = !!state.only;
+        b.both.hidden = !state.only;
+        b.full.hidden = !canFull;
+        b.full.textContent = document.fullscreenElement ? "Exit full screen" : "\u26F6 Full screen";
+      }
+      const u = new URL(location.href);
+      if (state.only) u.searchParams.set("view", PARAM[state.only]); else u.searchParams.delete("view");
+      try { history.replaceState(null, "", u.toString()); } catch { /* not allowed here */ }
+      document.title = state.only ? `${NAMES[state.only]} \u00b7 PoE2 Data Desk` : document.title.replace(/^(Trade Ledger|Exchange Calculator) \u00b7 /, "");
+    }
+    function setOnly(name) { state.only = name; if (name) state.tab = name; paint(); }
+    function leaveFullscreen() { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
+
+    const tabs = el("div", { class: "xc-tabs", role: "tablist", "aria-label": "Trade Desk panels" });
+    const tabButtons = {};
+    for (const name of ["calc", "ledger"]) {
+      const b = el("button", { type: "button", class: "xc-tab", role: "tab" }, document.createTextNode(name === "calc" ? "Calculator" : "Ledger"));
+      b.addEventListener("click", () => { state.tab = name; safeStore.set("poe2dd.tab", name); paint(); });
+      tabButtons[name] = b; tabs.append(b);
+    }
+    cols.before(tabs);
+
+    for (const name of ["ledger", "calc"]) {
+      const heading = panels[name].querySelector(".xc-col-h");
+      if (!heading) continue;
+      const label = el("span", {}, document.createTextNode(heading.textContent));
+      heading.textContent = "";
+      const pop = el("a", { class: "xc-colbtn", href: hrefFor(name), target: "_blank", rel: "noopener", title: "Open this panel on its own page" }, document.createTextNode("Pop out \u2197"));
+      const both = el("button", { type: "button", class: "xc-colbtn", title: "Show the ledger and calculator together" }, document.createTextNode("Show both"));
+      const full = el("button", { type: "button", class: "xc-colbtn", title: "Fill the screen with this panel" }, document.createTextNode("\u26F6 Full screen"));
+      both.addEventListener("click", () => { leaveFullscreen(); setOnly(null); });
+      full.addEventListener("click", () => {
+        if (document.fullscreenElement) { leaveFullscreen(); return; }
+        if (!state.only) { setOnly(name); state.enteredFullscreen = true; }
+        document.documentElement.requestFullscreen().catch(() => { if (state.enteredFullscreen) { state.enteredFullscreen = false; setOnly(null); } });
+      });
+      buttons[name] = { pop, both, full };
+      heading.append(label, el("span", { class: "xc-col-act" }, pop, both, full));
+    }
+    document.addEventListener("fullscreenchange", () => {
+      if (!document.fullscreenElement && state.enteredFullscreen) { state.enteredFullscreen = false; setOnly(null); } else paint();
+    });
+    const sizeNav = () => { const nav = document.getElementById("tools-nav"); if (nav) document.documentElement.style.setProperty("--navh", `${nav.offsetHeight}px`); };
+    sizeNav(); window.addEventListener("resize", sizeNav);
+    views = { show(name) { if (state.only && state.only !== name) setOnly(null); state.tab = name; paint(); } };
+    paint();
+  }
+  // Make sure a panel is on screen before something scrolls to it (the ledger's "Open in calculator", for example).
+  function showPanel(name) { mountViews(); if (views) views.show(name); }
+
+  window.ToolsUI = { mountNav, openSettings, setLeague, mountViews, showPanel };
 })();

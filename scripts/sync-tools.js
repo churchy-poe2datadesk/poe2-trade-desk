@@ -30,7 +30,8 @@ for (const f of ["exchange.js", "ledger.js"]) {
     ["(local backend only; it never contacts poe.ninja)", "(this page only reads the published data file; it never contacts poe.ninja)"]
   ]).split("/exchange?").join("/tradedesk?").split("a[href^='/exchange?']").join("a[href^='/tradedesk?']"));
 }
-write("tools-ui.js", read("tools-ui.js")); // the top bar reads window.REPORTS_URL (config.js) itself
+// Local-only bits (a link to the private dashboard, wording about it) never run on the public site, so they are removed from its source too.
+write("tools-ui.js", read("tools-ui.js").split("\n").filter(l => !l.includes("\\u2190 Dashboard")).join("\n").replace("Saved on this computer, and shared with the dashboard.", "Saved on this computer.").replace(" (so the dashboard sees them too)", "")); // the top bar reads window.REPORTS_URL (config.js) itself
 
 write("exchange.css", read("exchange.css") + "\n.pt-footer{margin:32px 0 8px;padding-top:14px;text-align:center;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}\n");
 write("ledger.css", read("ledger.css"));

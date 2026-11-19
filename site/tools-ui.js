@@ -1,6 +1,6 @@
 "use strict";
 // Shared UI bits for the trading tools: the header navigation and the Settings box.
-// Settings are saved through the backend when it is there (so the dashboard sees them too),
+// Settings are saved through the backend when it is there,
 // or in this browser when the page is hosted as a plain static site.
 (function () {
   const MM = window.MarketModel;
@@ -19,7 +19,6 @@
     const local = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
     const left = el("span", { class: "xc-nav-l" });
     if (window.REPORTS_URL) left.append(el("a", { href: window.REPORTS_URL, class: "xc-navlink" }, document.createTextNode("\u2190 Home")));
-    if (local) left.append(el("a", { href: "http://127.0.0.1:3212/", class: "xc-navlink" }, document.createTextNode("\u2190 Dashboard")));
 
     const mode = MM.getMode();
     const pick = el("select", { class: "xc-input xc-modepick", "aria-label": "Softcore or hardcore market" });
@@ -62,7 +61,7 @@
     const body = el("div", { class: "xc-detail on" });
     body.append(el("h4", {}, document.createTextNode("Settings")));
     body.append(el("p", {}, document.createTextNode(state.source === "backend"
-      ? "Saved on this computer, and shared with the dashboard."
+      ? "Saved on this computer."
       : "Saved in this browser only.")));
     const inputs = new Map();
     let group = "";

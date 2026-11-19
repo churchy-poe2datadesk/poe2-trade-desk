@@ -60,7 +60,7 @@ function lineSummary(data) {
 // Each icon is downloaded once (a few new ones per run at most), from the same hosts poe.ninja uses, and published
 // beside the data so visitors load them from our own address, never from poe.ninja or Grinding Gear Games.
 const ICON_HOSTS = ["https://web.poecdn.com", "https://poe.ninja"];
-const MAX_JSON_BYTES = 40 * 1024 * 1024, MAX_ICON_BYTES = 250 * 1024, MAX_NEW_ICONS = 120, RETRY_FAILED_MS = 6 * 3600 * 1000;
+const MAX_JSON_BYTES = 40 * 1024 * 1024, MAX_ICON_BYTES = 250 * 1024, MAX_NEW_ICONS = 200, RETRY_FAILED_MS = 6 * 3600 * 1000;
 const iconUrls = src => {
   if (typeof src !== "string" || !src) return [];
   if (src.startsWith("/gen/image/")) return ICON_HOSTS.map(h => h + src);

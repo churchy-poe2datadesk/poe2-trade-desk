@@ -133,6 +133,7 @@ const fakeFetch = async (url, opts) => {
     assert.equal(stashCalls, ITEM_CATEGORIES.length, "every gear category fetched on the first run");
     let gm = JSON.parse(fs.readFileSync(path.join(gOut, "market.json"), "utf8"));
     const sword = gm.items.find(i => i.key === "UniqueWeapons:sword-UniqueWeapons");
+    assert.ok(sword && /^\/icons\/[a-f0-9]{20}\.png$/.test(sword.icon || ""), "gear gets a local icon file");
     assert.ok(sword && sword.kind === "unique" && sword.activity === 0 && sword.listings > 0 && sword.divine === 40 && sword.prof === null, "gear: no volume, listings kept apart, no swing profile");
     assert.equal(gm.items.filter(i => i.key === "UniqueWeapons:sword-UniqueWeapons").length, 1, "repeated gear id kept once");
     assert.ok(gm.items.some(i => i.key === "Currency:divine" && !i.kind), "currency is not marked as gear");

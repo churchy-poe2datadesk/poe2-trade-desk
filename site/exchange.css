@@ -157,5 +157,7 @@ h3{font:600 12px Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;
 
 .xc-nav-r{align-items:center;gap:12px}
 .xc-off{display:inline-block;padding:2px 10px;border-radius:999px;border:1px solid #6b5a2f;background:#2a2410;color:#ecc86a;font-size:12px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.xc-nav a.xc-credit{background:none;border:0;box-shadow:none;padding:0 4px;font-size:12px;white-space:nowrap;color:var(--muted);text-decoration:underline}
+@media (max-width:900px){.xc-credit{display:none}}
 
 .pt-footer{margin:32px 0 8px;padding-top:14px;text-align:center;border-top:1px solid #3a3d42;color:#9a9ca1;font:12px/1.5 Arial,sans-serif}.pt-footer a{color:#c8a66d}

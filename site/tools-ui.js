@@ -42,7 +42,7 @@
       right.prepend(el("span", { class: "xc-off" }, document.createTextNode("Offline version")));
       fetch("/settings", { cache: "no-store" }).then(r => r.json()).then(d => { if (d && d.values && d.values["publish.discordUrl"]) addDiscord(d.values["publish.discordUrl"]); }).catch(() => {});
     }
-    right.append(gear);
+    right.append(el("a", { href: "https://poe.ninja", class: "xc-navlink xc-credit", rel: "noopener noreferrer", target: "_blank", title: "Market data comes from poe.ninja" }, document.createTextNode("Data: poe.ninja")), gear);
     host.append(left, mid, right);
   }
   // Called once the market data is loaded: shows the league name in the bar ("HC Forbidden Rites" or "forbidden-rites-hc" become "Forbidden Rites").

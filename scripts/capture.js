@@ -12,6 +12,9 @@ const { weekShape, swingProfile } = require("./lib/exchange-stats");
 
 const CATEGORIES = ["Currency", "Fragments", "Abyss", "UncutGems", "LineageSupportGems", "Essences", "SoulCores", "Idols", "Runes", "Ritual", "Expedition", "Delirium", "Breach", "Verisium"];
 const num = v => (v === null || v === undefined || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+// Published numbers are rounded to what the tools need (a swap is never decided on the sixth digit), which keeps the
+// file small and means it is processed data, not a verbatim copy of poe.ninja's figures.
+const sig = (v, p) => (Number.isFinite(v) ? Number(v.toPrecision(p)) : v);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 async function readJson(file, fallback) { try { return JSON.parse(await fs.readFile(file, "utf8")); } catch { return fallback; } }
@@ -181,8 +184,10 @@ async function run({ outDir, settings, fetchImpl = fetch, now = () => Date.now()
       const points = (history[`${category}:${line.id}`] || []).map(p => ({ t: p[0] * 1000, v: p[1] }));
       const spark7 = line.s ? { total: line.s.total, data: line.s.data } : null;
       const iconFile = line.i && iconFiles.get(iconId(line.i));
-      items.push({ key: `${category}:${line.id}`, name: line.name, category, ...(iconFile ? { icon: `/icons/${iconFile}` } : {}), divine: line.v, activity: Number(line.a) || 0,
-        change7: Number.isFinite(spark7 && spark7.total) ? spark7.total : null, ...(weekShape(line.v, spark7) || {}), prof: swingProfile(points, line.v) });
+      const shape = weekShape(line.v, spark7) || {};
+      items.push({ key: `${category}:${line.id}`, name: line.name, category, ...(iconFile ? { icon: `/icons/${iconFile}` } : {}), divine: sig(line.v, 6), activity: Math.round(Number(line.a) || 0), ...shape,
+        change7: Number.isFinite(spark7 && spark7.total) ? Math.round(spark7.total * 100) / 100 : null,
+        ...("recent3" in shape ? { recent3: sig(shape.recent3, 4), avg7: sig(shape.avg7, 5) } : {}), prof: swingProfile(points, line.v) });
     }
   }
   if (!items.length) throw new Error(`No market data captured (${failures.join("; ") || "nothing returned"}).`);

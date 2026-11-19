@@ -7,3 +7,5 @@ window.MARKET_URL_HC = "https://churchy-poe2datadesk.github.io/poe2-trade-desk/m
 window.XC_BACKEND = "https://churchy-poe2datadesk.github.io/poe2-trade-desk";
 // The home page of the reports website; the Trade Desk top bar links back to it.
 window.REPORTS_URL = "https://poe2-data-desk.pages.dev/";
+// Your Discord server invite (a permanent one, https://discord.gg/...). When set, the Trade Desk top bar shows a Discord link.
+window.DISCORD_URL = "https://discord.gg/qMRcRr3FM";

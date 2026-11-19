@@ -32,7 +32,18 @@
     const mid = el("span", { class: "xc-nav-mid" }, el("strong", {}, document.createTextNode("Trade Desk")), league, pick, tag);
 
     const gear = el("button", { id: "open-settings", type: "button", class: "xc-btn xc-navbtn" }, document.createTextNode("\u2699 Settings"));
-    host.append(left, mid, el("span", { class: "xc-nav-r" }, gear));
+    const right = el("span", { class: "xc-nav-r" });
+    // Discord invite: from config.js on the public site; from your Publishing setting when running offline.
+    const addDiscord = url => {
+      try { const u = new URL(url); if (u.protocol !== "https:" || u.username || u.password) return; right.prepend(el("a", { href: u.href, class: "xc-navlink", rel: "noopener noreferrer", target: "_blank" }, document.createTextNode("Discord"))); } catch { /* not a valid link */ }
+    };
+    if (window.DISCORD_URL) addDiscord(window.DISCORD_URL);
+    if (local) {
+      right.prepend(el("span", { class: "xc-off" }, document.createTextNode("Offline version")));
+      fetch("/settings", { cache: "no-store" }).then(r => r.json()).then(d => { if (d && d.values && d.values["publish.discordUrl"]) addDiscord(d.values["publish.discordUrl"]); }).catch(() => {});
+    }
+    right.append(gear);
+    host.append(left, mid, right);
   }
   // Called once the market data is loaded: shows the league name in the bar ("HC Forbidden Rites" or "forbidden-rites-hc" become "Forbidden Rites").
   function setLeague(name) {

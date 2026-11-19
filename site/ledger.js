@@ -45,9 +45,11 @@
     } catch { return []; }
   }
   function saveTrades() { try { localStorage.setItem(storeKey(), JSON.stringify({ version: 1, trades: state.trades })); } catch { /* storage blocked: kept in memory only */ } }
+  const MAX_QTY = 1e12, MAX_TRADES = 5000;
+  const goodQty = q => typeof q === "number" && Number.isFinite(q) && q > 0 && q <= MAX_QTY; // JSON like 1e999 becomes Infinity
   function validTrade(t) {
     return t && typeof t.id === "string" && t.give && t.get && typeof t.give.key === "string" && typeof t.get.key === "string"
-      && t.give.qty > 0 && t.get.qty > 0 && Number.isFinite(Date.parse(t.ts));
+      && goodQty(Number(t.give.qty)) && goodQty(Number(t.get.qty)) && Number.isFinite(Date.parse(t.ts));
   }
 
   // ---------- item pickers ----------
@@ -330,13 +332,16 @@
         id: String(t.id).slice(0, 40), ts: new Date(t.ts).toISOString(),
         give: { key: String(t.give.key).slice(0, 120), qty: Number(t.give.qty) }, get: { key: String(t.get.key).slice(0, 120), qty: Number(t.get.qty) },
         note: typeof t.note === "string" ? t.note.slice(0, 120) : "",
-        closed: t.closed && t.closed.qty > 0 && Number.isFinite(Date.parse(t.closed.ts)) ? { qty: Number(t.closed.qty), ts: new Date(t.closed.ts).toISOString() } : null
+        closed: t.closed && goodQty(Number(t.closed.qty)) && Number.isFinite(Date.parse(t.closed.ts)) ? { qty: Number(t.closed.qty), ts: new Date(t.closed.ts).toISOString() } : null
       }));
       const have = new Set(state.trades.map(t => t.id));
-      const added = incoming.filter(t => !have.has(t.id));
+      let added = incoming.filter(t => !have.has(t.id) && have.add(t.id)); // also skips an id repeated inside the file
+      const room = Math.max(0, MAX_TRADES - state.trades.length);
+      const overflow = Math.max(0, added.length - room);
+      added = added.slice(0, room);
       state.trades.push(...added); saveTrades(); render();
       const other = parsed && typeof parsed.league === "string" && state.league && leagueSlug(parsed.league) !== state.league ? ` This backup is from a different league (${parsed.league.slice(0, 40)}); its trades are valued at the current league's prices.` : "";
-      msg.textContent = `Imported ${added.length} trade${added.length === 1 ? "" : "s"}${incoming.length - added.length ? ` (${incoming.length - added.length} already there)` : ""}.${other}`;
+      msg.textContent = `Imported ${added.length} trade${added.length === 1 ? "" : "s"}${incoming.length - added.length - overflow ? ` (${incoming.length - added.length - overflow} already there)` : ""}.${other}${overflow ? ` ${overflow} more were skipped: the ledger holds at most ${MAX_TRADES} trades.` : ""}`;
     });
   }
 

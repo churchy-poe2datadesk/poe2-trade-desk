@@ -147,7 +147,7 @@
       <div class="xc-about-body">
         <p><strong>Usual price.</strong> From an item's own daily captures once it has 5 or more days: a robust trend line if it has been clearly trending, otherwise the median of its last 7 days. With less history it falls back to the median of poe.ninja's own 7-day shape, but only if that week moved less than 15%, because a bigger move is a trend and not a bargain. Medians mean one-off spikes barely move it.</p>
         <p><strong>Net profit.</strong> The gap to the usual price, multiplied by how much of a gap usually closes, minus the estimated gap between buying and selling prices (the game charges no fee, but you buy at the asking price and sell at the lower bidding price). Prices rarely return all the way, so only part of the gap counts (20% until an item has 10 days of its own history to measure it from). That gap is the estimate you set in Settings for busy markets, doubled at 100 to 1000 Divine a day and quadrupled below that.</p>
-        <p><strong>What gets listed.</strong> Items trading at least 100 Divine a day (never the Divine Orb itself), whose gap is at least twice their normal change between updates, whose price is not more than double or half the usual, and whose net profit beats your minimum. If nothing qualifies the page says why. An empty list is an honest answer, not a fault.</p>
+        <p><strong>What gets listed.</strong> Items trading at least the minimum daily volume in Settings (50 Divine a day by default; never the Divine Orb itself), whose gap is at least twice their normal change between updates, whose price is not more than double or half the usual, and whose net profit beats your minimum. If nothing qualifies the page says why. An empty list is an honest answer, not a fault.</p>
         <p><strong>Swings.</strong> Measured on prices with the overall trend taken out, so a steady climb is reported as a trend and not as swings. A swing is a move of at least 5% (or three times the item's normal wobble, if larger). <em>Early</em> is under 3 days of captures, <em>Developing</em> is 3 to 7 days, and <em>Regular swinger</em> needs a week or more with at least 6 swings of consistent size, repeating every 12 hours to 7 days. Every capture you take sharpens this, so over a league the regular swingers stand out.</p>
         <p><strong>Spikes.</strong> A price at least 35% from its median (and well outside its normal wobble) is flagged as a one-off. A buy at a one-off dip or a sell into a spike loses score, since it may not last.</p>
         <p><strong>Score</strong> (0 to 100): 45% net profit, 25% swing regularity, 20% liquidity (log scale from 100 to 10,000 Divine a day), 10% confidence, then cut to half when the price is still moving against you and to 60% if today's gap is an unconfirmed jump. <strong>Confidence</strong> is High with 14+ days, 100+ updates and 1000+ Divine a day, Medium with 7+ days, 48+ updates and 100+ Divine, and Low otherwise (always Low on poe.ninja's shape alone).</p>
@@ -169,6 +169,54 @@
   </section>
   </div>
   </div>
+  <section class="xc-terms" aria-label="About the Trade Desk">
+    <details>
+      <summary>About the Trade Desk: terms and calculations</summary>
+      <div class="xc-terms-body">
+        <h3>Where the numbers come from</h3>
+        <dl>
+          <dt>Prices</dt><dd>Taken from poe.ninja's currency and item economy data, which updates about once an hour for Path of Exile 2. Every price is converted to Divine Orb equivalents so different currencies can be compared. The time of the latest update is shown at the top of the page.</dd>
+          <dt>Daily volume</dt><dd>poe.ninja's estimate of how much of an item traded per day, counted in Divine Orbs. Busy items (1000+ Divine a day) have tight, reliable prices. Quiet items (under 100) can swing a lot on a few sales, so they are treated more cautiously throughout.</dd>
+          <dt>Softcore and Hardcore</dt><dd>Each has its own market and its own prices. The switch in the top bar changes every number on the page.</dd>
+        </dl>
+        <h3>Exchange Calculator</h3>
+        <dl>
+          <dt>Market ratio</dt><dd>How many of the right currency one of the left is worth at current prices. "Use market ratio" fills it in.</dd>
+          <dt>Margin</dt><dd>How far your amounts are from the market ratio, as a percentage, before any buy/sell gap. A positive margin means you receive more than the market ratio suggests. Typing a margin sets the ratio for you.</dd>
+          <dt>Type both amounts myself</dt><dd>When ticked, changing one side does not change the other, so you can enter exact whole numbers on both sides.</dd>
+          <dt>Make the amounts whole</dt><dd>The in-game exchange only takes whole numbers. "Raise left to whole" or "Raise right to whole" increases that side to the next whole number where the other side lands exactly on the ratio, searching up to the "look ahead" number of steps. If none is found it rounds the other side to the nearest whole number and shows the ratio you would actually get. "Smallest exact pair" gives the smallest whole amounts that match the ratio exactly; multiply both by the same whole number to scale up.</dd>
+        </dl>
+        <h3>Buy low, sell high</h3>
+        <dl>
+          <dt>Usual price</dt><dd>What an item normally costs. With five or more days of our own hourly captures it is the median of the last week, or a trend line if the price is clearly drifting. With less history it is the median of poe.ninja's 7-day price shape, and only when that week was calm.</dd>
+          <dt>Trending</dt><dd>An item that moved a lot over the week (more than the "trend caution" setting) is drifting, not bargain-priced. Its usual price is pulled toward today's price, so the idea fades as the move grows and disappears completely at four times that limit.</dd>
+          <dt>Buy/sell gap</dt><dd>You buy at the asking price and sell at the lower bidding price, so a round trip starts a few percent down. This is an estimate, not a fee (the game charges none). It starts at the percentage in Settings for busy markets, doubles at 100 to 1000 Divine a day, and quadruples below that.</dd>
+          <dt>Expected net profit</dt><dd>The gap between today's price and the usual price, times how much of that gap is expected to close (a setting, 20% by default, refined from an item's own history once there is enough), minus the buy/sell gap. It is an expectation, not a promise: prices often do not return.</dd>
+          <dt>Normal day-to-day noise</dt><dd>Each item has a typical size of price change between updates, measured from its own history or from real data on items with similar volume. A gap smaller than that is not counted as a real opportunity.</dd>
+          <dt>Spike</dt><dd>A price far from its median and well outside its normal noise. A spike up is more often a one-off than a new level, so it counts against buying and for selling.</dd>
+          <dt>Ranking</dt><dd>Ideas are ranked 0 to 100, mostly by expected net profit, then by how regularly the item swings back, how easy it is to trade (volume), and how much history backs the numbers. Ideas are scaled down if the price is still moving against you.</dd>
+          <dt>Looser pick</dt><dd>When there are few clear ideas, thinner or smaller-edge items can be shown with this tag. They are weaker bets and should be sized smaller.</dd>
+          <dt>Confidence</dt><dd><strong>High</strong> needs at least 14 days of our own captures, plenty of data points and 1000+ Divine a day. <strong>Medium</strong> needs 7 days, enough data points and 100+ a day. Everything else, including anything based only on poe.ninja's 7-day shape, is <strong>Low</strong>.</dd>
+          <dt>Minimum daily volume</dt><dd>Items trading less than the Settings minimum (50 Divine a day by default) are left out, because their prices are too noisy to trust.</dd>
+        </dl>
+        <h3>Trade Ledger</h3>
+        <dl>
+          <dt>Position</dt><dd>One trade you logged: what you gave and what you got. The ledger measures everything in Divine, so a trade only counts as a win if you hold more Divine value afterwards.</dd>
+          <dt>Profit or loss now</dt><dd>What you would get today if you sold back what you hold, after the estimated sell-side gap, compared with what you paid.</dd>
+          <dt>Swap ideas</dt><dd>Where your holding could move to and back later. It assumes you swap now, wait for part of the price gaps to close, then swap back, paying the buy/sell gap each way. Only whole numbers are suggested, shown as how many to give and about how many you would receive. A swap that would return less than 1 whole unit is not offered.</dd>
+          <dt>Alerts</dt><dd>The bell flags a swap worth at least the alert percentage, an item well above its usual price (a sell window), a position down by the loss threshold, and items that barely trade. The thresholds are in Settings.</dd>
+          <dt>Where it is saved</dt><dd>Only in this browser, on this device. Nothing is uploaded. Use Export to keep a backup, and Import to bring it back or move it to another browser.</dd>
+        </dl>
+        <h3>Limits</h3>
+        <ul>
+          <li>These are estimates from public market data, not advice. Prices can move between updates and the game's real exchange rate at the moment you trade may differ.</li>
+          <li>Neither poe.ninja's estimates nor our history can see patches, nerfs, new content or sudden demand. Check the news before acting on a big move.</li>
+          <li>Early in a league the history is short, so confidence is mostly Low and ideas are fewer and rougher.</li>
+          <li>Thin markets can show prices that no one can actually trade at.</li>
+        </ul>
+      </div>
+    </details>
+  </section>
   <footer class="pt-footer"><p>Prices come from <a href="https://poe.ninja" target="_blank" rel="noopener noreferrer">poe.ninja</a> (economy overview data, refreshed hourly). This site is not affiliated with or endorsed by poe.ninja or Grinding Gear Games. Estimates only; not financial advice. Your ledger is saved in this browser only.</p></footer>
 </main>
 <div id="xc-modal" class="xc-modal" hidden>

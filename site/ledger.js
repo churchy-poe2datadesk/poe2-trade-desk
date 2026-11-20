@@ -53,6 +53,26 @@
       && goodQty(Number(t.give.qty)) && goodQty(Number(t.get.qty)) && Number.isFinite(Date.parse(t.ts));
   }
 
+  // The Divine value of both sides at the moment of the trade, so the real result can be measured later.
+  const entryFor = (give, gq, got, tq) => (give.divine > 0 && got.divine > 0 ? { entry: { give: gq * give.divine, get: tq * got.divine } } : {});
+
+  // ---------- values in Divine / Chaos / Exalted ----------
+  const UNIT_KEY = "poe2dd.ledgerUnit";
+  let unitPref = "auto"; try { const u = localStorage.getItem(UNIT_KEY); if (["auto", "div", "chaos", "ex"].includes(u)) unitPref = u; } catch { /* default */ }
+  const priceDiv = key => { const i = state.map.get(key); return i && i.divine > 0 ? i.divine : null; };
+  // Picks the unit for an amount worth `div` Divine. Automatic follows the size (1 Divine or more: Divine; 1 Chaos up to 1 Divine: Chaos; below that: Exalted),
+  // so a position that jumps from Chaos-sized to Divine-sized is shown in Divine on the next refresh.
+  function unitFor(div) {
+    const chaos = priceDiv("Currency:chaos"), ex = priceDiv("Currency:exalted");
+    const mk = (name, p) => ({ name, p });
+    const pref = unitPref === "auto" ? (Math.abs(div) >= 1 || !chaos ? "div" : Math.abs(div) >= chaos || !ex ? "chaos" : "ex") : unitPref;
+    if (pref === "chaos" && chaos) return mk("Chaos", chaos);
+    if (pref === "ex" && ex) return mk("Exalted", ex);
+    return mk("Divine", 1);
+  }
+  const money = (div, unit) => `${fmt(div / unit.p)} ${unit.name}`;
+  const signedMoney = (div, unit) => `${div >= 0 ? "+" : "\u2212"}${fmt(Math.abs(div) / unit.p)} ${unit.name}`;
+
   function validDrop(d) {
     return d && typeof d.id === "string" && typeof d.key === "string" && goodQty(Number(d.qty)) && Number.isFinite(Date.parse(d.ts))
       && (!d.sold || (goodQty(Number(d.sold.divine)) && Number.isFinite(Date.parse(d.sold.ts))));
@@ -115,7 +135,8 @@
     if (give.key === got.key) return fail("Give and get must be different currencies.");
     if (!(gq > 0) || !(tq > 0)) return fail("Enter an amount for both sides.");
     const ts = $("trade-when").value ? new Date($("trade-when").value).toISOString() : new Date().toISOString();
-    state.trades.push({ id: uid(), ts, give: { key: give.key, qty: gq }, get: { key: got.key, qty: tq }, note: $("trade-note").value.trim().slice(0, 120), closed: null });
+    const fresh = Math.abs(Date.now() - Date.parse(ts)) < 90 * 60 * 1000; // a back-dated trade has no known entry price
+    state.trades.push({ id: uid(), ts, give: { key: give.key, qty: gq }, get: { key: got.key, qty: tq }, ...(fresh ? entryFor(give, gq, got, tq) : {}), note: $("trade-note").value.trim().slice(0, 120), closed: null });
     saveTrades(); msg.textContent = "";
     for (const id of ["give-name", "give-qty", "get-name", "get-qty", "trade-ratio", "trade-note"]) $(id).value = "";
     setNow(); render(); updateHint();
@@ -221,15 +242,19 @@
       const chips = el("div", { class: "lg-chips" });
       const prem = pos.premiumB;
       if (prem !== null) chips.append(el("span", { class: `lg-chip ${prem >= 1 + state.opts.sellWindowPct / 100 ? "good" : prem <= 0.9 ? "warn" : ""}` }, `${nameOf(trade.get.key)} is ${Math.abs((prem - 1) * 100).toFixed(0)}% ${prem >= 1 ? "above" : "below"} its usual price`));
-      if (pos.plPct <= -state.opts.badLossPct) chips.append(el("span", { class: "lg-chip bad" }, "Down on your cost"));
+      if (pos.resultPct !== null && pos.resultPct <= -state.opts.badLossPct) chips.append(el("span", { class: "lg-chip bad" }, "Down in Divine value"));
       const sp = MM.spikeOf(pos.B, state.opts.spikePct).now; if (sp) chips.append(el("span", { class: "lg-chip warn" }, sp > 0 ? "Price spike right now" : "Price dip right now"));
       card.append(chips);
       const stat = (label, value, cls) => el("div", {}, el("span", {}, label), el("strong", { class: cls || "" }, value));
-      card.append(el("div", { class: "lg-grid" },
-        stat("Worth now", `${fmt(pos.nowInA)} ${nameOf(trade.give.key)}`),
-        stat("Profit (mid price)", pct(pos.plPct), tone(pos.plPct)),
-        stat(`Profit after ${state.opts.exchangeSpreadPct}% spread`, pct(pos.plNetPct), tone(pos.plNetPct)),
-        stat("Market ratio now", `${fmt(pos.marketRatio)} per 1`)));
+      const u = unitFor(Math.max(pos.nowDivine, pos.entryDivine || 0));
+      const stats = [stat("Worth now", money(pos.nowDivine, u))];
+      if (pos.entryDivine !== null) stats.push(
+        stat("Gave up (its value then)", money(pos.entryDivine, u)),
+        stat("Result (mid price)", `${signedMoney(pos.resultDivine, u)} (${pct(pos.resultPct)})`, tone(pos.resultPct)),
+        stat(`Result after ${state.opts.exchangeSpreadPct}% spread`, `${signedMoney(pos.resultNetDivine, u)} (${pct(pos.resultNetPct)})`, tone(pos.resultNetPct)));
+      stats.push(stat("Market ratio now", `${fmt(pos.marketRatio)} per 1`));
+      card.append(el("div", { class: "lg-grid" }, ...stats));
+      if (pos.entryDivine === null) card.append(el("p", { class: "lg-meta" }, "This trade was logged before entry prices were recorded (or back-dated), so its result cannot be measured. Trades logged from now on record it."));
       card.append(el("div", { class: "lg-h" }, "Top 3 swaps"));
       const ul = el("ul", { class: "lg-swaps" });
       if (!options.length) ul.append(el("li", { class: "lg-empty" }, unique ? "Swap ideas cover exchange currencies only. A unique is sold on the trade site, so watch its price against the usual level and list it when it is high." : basis && !(basis.F > 0) ? `There is no reliable usual price for ${nameOf(trade.get.key)} yet (${basis.trending ? "its price has been trending" : "not enough history"}), so swap ideas are held back until there is.` : tooSmall ? `A swap looks profitable, but ${fmt(trade.get.qty)} ${nameOf(trade.get.key)} is too little to get even 1 whole unit of the other currency (the exchange only trades whole numbers). Hold until you have more, or sell it for something cheaper.` : "No swap looks profitable right now once trading costs are paid. Holding, or selling at a better time, may be wiser."));
@@ -247,8 +272,10 @@
     card.append(el("div", { class: "lg-btns" }, close, del));
     const rowClose = el("button", { type: "button", class: "xc-btn lg-rowbtn" }, "Close");
     rowClose.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); closePosition(trade, pos); });
-    return collapsible(trade.id, `${fmt(trade.get.qty)} ${nameOf(trade.get.key)}`, `paid ${fmt(trade.give.qty)} ${nameOf(trade.give.key)}`, pos ? pct(pos.plPct) : "", pos ? tone(pos.plPct) : "", card,
-      [{ t: `${fmt(trade.give.qty)} ${nameOf(trade.give.key)}` }, { t: pos ? `${fmt(pos.nowInA)} ${nameOf(trade.give.key)}` : "-" }, { t: pos ? pct(pos.plPct) : "-", cls: pos ? tone(pos.plPct) : "" }, { t: pos ? pct(pos.plNetPct) : "-", cls: pos ? tone(pos.plNetPct) : "" }, { node: rowClose }]);
+    return collapsible(trade.id, `${fmt(trade.get.qty)} ${nameOf(trade.get.key)}`, `paid ${fmt(trade.give.qty)} ${nameOf(trade.give.key)}`, pos && pos.resultPct !== null ? pct(pos.resultPct) : "", pos && pos.resultPct !== null ? tone(pos.resultPct) : "", card,
+      [{ t: `${fmt(trade.give.qty)} ${nameOf(trade.give.key)}` }, { t: pos ? money(pos.nowDivine, unitFor(Math.max(pos.nowDivine, pos.entryDivine || 0))) : "-" },
+       { t: pos && pos.resultPct !== null ? pct(pos.resultPct) : "-", cls: pos && pos.resultPct !== null ? tone(pos.resultPct) : "" },
+       { t: pos && pos.resultNetPct !== null ? pct(pos.resultNetPct) : "-", cls: pos && pos.resultNetPct !== null ? tone(pos.resultNetPct) : "" }, { node: rowClose }]);
   }
 
   function closePosition(trade, pos) {
@@ -336,15 +363,15 @@
 
   function renderSummary() {
     const open = state.trades.filter(t => !t.closed);
-    let cost = 0, value = 0, realisedCost = 0, realisedBack = 0;
-    for (const t of open) { const p = MM.valuePosition(t, state.map, state.opts); if (p) { cost += p.costDivine; value += p.nowDivine; } }
+    let cost = 0, value = 0, valueKnown = 0, realisedCost = 0, realisedBack = 0;
+    for (const t of open) { const p = MM.valuePosition(t, state.map, state.opts); if (p) { value += p.nowDivine; if (p.entryDivine !== null) { cost += p.entryDivine; valueKnown += p.nowDivine; } } }
     for (const t of state.trades.filter(t => t.closed)) { const A = state.map.get(t.give.key); if (A) { realisedCost += t.give.qty * A.divine; realisedBack += t.closed.qty * A.divine; } }
-    const open$ = cost > 0 ? (value / cost - 1) * 100 : null, real$ = realisedCost > 0 ? (realisedBack / realisedCost - 1) * 100 : null;
+    const open$ = cost > 0 ? (valueKnown / cost - 1) * 100 : null, real$ = realisedCost > 0 ? (realisedBack / realisedCost - 1) * 100 : null;
     const box = $("lg-summary"); box.textContent = "";
     const stat = (label, value, cls) => el("div", { class: "lg-stat" }, el("span", {}, label), el("strong", { class: cls || "" }, value));
     box.append(stat("Open positions", String(open.length)),
-      stat("Cost (Divine)", cost ? fmt(cost) : "-"),
-      stat("Worth now (Divine)", value ? fmt(value) : "-"),
+      stat(`Cost (${unitFor(Math.max(cost, value)).name})`, cost ? money(cost, unitFor(Math.max(cost, value))) .replace(/ \S+$/, "") : "-"),
+      stat(`Worth now (${unitFor(Math.max(cost, value)).name})`, value ? money(value, unitFor(Math.max(cost, value))).replace(/ \S+$/, "") : "-"),
       stat("Open profit", open$ === null ? "-" : pct(open$), open$ === null ? "" : tone(open$)));
     if (real$ !== null) box.append(stat("Closed profit", pct(real$), tone(real$)));
   }
@@ -402,7 +429,7 @@
     const host = $("positions"); host.textContent = "";
     if (!open.length) host.append(el("p", { class: "lg-empty" }, "No open positions. Log a trade above to start tracking it."));
     host.classList.toggle("lg-table", view.mode === "list");
-    if (open.length && view.mode === "list") host.append(listHead(["Position", "Paid", "Worth now", "Profit", "After spread", ""], [false, false, false, false, true]));
+    if (open.length && view.mode === "list") host.append(listHead(["Position", "Paid", "Worth now", "Result", "After spread", ""], [false, false, false, false, true]));
     for (const t of open) host.append(positionCard(t));
     renderSummary(); renderDrops(); renderClosed(); renderAlerts();
   }
@@ -422,6 +449,7 @@
       const incoming = (Array.isArray(parsed && parsed.trades) ? parsed.trades : []).filter(validTrade).map(t => ({
         id: String(t.id).slice(0, 40), ts: new Date(t.ts).toISOString(),
         give: { key: String(t.give.key).slice(0, 120), qty: Number(t.give.qty) }, get: { key: String(t.get.key).slice(0, 120), qty: Number(t.get.qty) },
+        ...(t.entry && Number(t.entry.give) > 0 && Number(t.entry.give) < 1e12 ? { entry: { give: Number(t.entry.give), get: Number(t.entry.get) > 0 ? Number(t.entry.get) : 0 } } : {}),
         note: typeof t.note === "string" ? t.note.slice(0, 120) : "",
         closed: t.closed && goodQty(Number(t.closed.qty)) && Number.isFinite(Date.parse(t.closed.ts)) ? { qty: Number(t.closed.qty), ts: new Date(t.closed.ts).toISOString() } : null
       }));
@@ -492,6 +520,7 @@
   document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshQuietly(); });
 
   $("trade-form").addEventListener("submit", onSubmit);
+  { const sel = $("lg-unit"); sel.value = unitPref; sel.addEventListener("change", () => { unitPref = sel.value; try { localStorage.setItem(UNIT_KEY, unitPref); } catch { /* kept for this page */ } render(); }); }
   $("drop-form").addEventListener("submit", onDropSubmit);
   $("trade-ratio").addEventListener("input", syncFromRatio);
   $("give-qty").addEventListener("input", () => { if (num($("trade-ratio").value) > 0) syncFromRatio(); else if (num($("get-qty").value) > 0) syncFromGet(); });
@@ -511,7 +540,7 @@
     if (!give || !got) return { ok: false, text: "Pick both currencies first." };
     if (give.key === got.key) return { ok: false, text: "Give and get must be different currencies." };
     if (!(g.qty > 0) || !(t.qty > 0)) return { ok: false, text: "Enter an amount on both sides first." };
-    state.trades.push({ id: uid(), ts: new Date().toISOString(), give: { key: give.key, qty: g.qty }, get: { key: got.key, qty: t.qty }, note: "", closed: null });
+    state.trades.push({ id: uid(), ts: new Date().toISOString(), give: { key: give.key, qty: g.qty }, get: { key: got.key, qty: t.qty }, ...entryFor(give, g.qty, got, t.qty), note: "", closed: null });
     saveTrades(); render();
     toast("good", "Added to ledger", `${fmt(g.qty)} ${give.name} for ${fmt(t.qty)} ${got.name}`, { label: "Show ledger", run: () => { if (window.ToolsUI && window.ToolsUI.showPanel) window.ToolsUI.showPanel("ledger"); $("col-ledger").scrollIntoView({ behavior: "smooth", block: "start" }); } });
     return { ok: true, text: "Added to your ledger." };

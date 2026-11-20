@@ -242,6 +242,14 @@
       premiumB: F > 0 ? B.divine / F : null,
       exitShare: B.activity > 0 ? (trade.get.qty * B.divine) / B.activity : null // your position as a share of a day's volume
     };
+    // The real result is measured in Divine: what the position is worth now against what was given up at the time of the trade.
+    // `trade.entry.give` is the Divine value of the given side when the trade was logged; older trades have none.
+    const eg = trade.entry && trade.entry.give > 0 ? Number(trade.entry.give) : null;
+    out.entryDivine = eg;
+    out.resultDivine = eg === null ? null : out.nowDivine - eg;
+    out.resultNetDivine = eg === null ? null : out.nowDivine * (1 - leg) - eg;
+    out.resultPct = eg === null ? null : (out.nowDivine / eg - 1) * 100;
+    out.resultNetPct = eg === null ? null : (out.nowDivine * (1 - leg) / eg - 1) * 100;
     if (trade.closed) out.realisedPct = (trade.closed.qty / trade.give.qty - 1) * 100;
     return out;
   }
@@ -335,13 +343,13 @@
         alerts.push({ id: `${id}:big:${best.C.key}`, tradeId: id, kind: "good", title: `Big swap for ${name}`,
           detail: `Trading ${name} for ${best.C.name} could earn about +${best.net.toFixed(0)}% if part of both price gaps closes (confidence ${best.confidence}, after the buy/sell gap).`, swapTo: best.C.key });
       }
-      if (sellWin && pos.plNetPct > 0) {
+      if (sellWin && pos.resultNetPct !== null && pos.resultNetPct > 0) {
         alerts.push({ id: `${id}:sell`, tradeId: id, kind: "good", title: `Good time to sell ${name}`,
-          detail: `${name} is ${((pos.premiumB - 1) * 100).toFixed(0)}% above its usual price and your position is up ${pos.plNetPct.toFixed(1)}% after the buy/sell gap.` });
+          detail: `${name} is ${((pos.premiumB - 1) * 100).toFixed(0)}% above its usual price and your position is up ${pos.resultNetPct.toFixed(1)}% in Divine after the buy/sell gap.` });
       }
-      if (pos.plPct <= -opts.badLossPct) {
-        alerts.push({ id: `${id}:loss`, tradeId: id, kind: "bad", title: `${name} is down ${Math.abs(pos.plPct).toFixed(0)}%`,
-          detail: `You paid ${trade.give.qty} ${pos.A.name}; it is worth about ${pos.nowInA.toFixed(2)} ${pos.A.name} now.` });
+      if (pos.resultPct !== null && pos.resultPct <= -opts.badLossPct) {
+        alerts.push({ id: `${id}:loss`, tradeId: id, kind: "bad", title: `${name} is down ${Math.abs(pos.resultPct).toFixed(0)}%`,
+          detail: `It is worth ${(pos.nowDivine).toFixed(2)} Divine now against ${pos.entryDivine.toFixed(2)} Divine when you traded for it.` });
         if (best && best.totalPct >= 0) {
           alerts.push({ id: `${id}:recoup:${best.C.key}`, tradeId: id, kind: "good", title: `Swap ${name} to ${best.C.name} could recoup the loss`,
             detail: `If it works out the position would end about ${best.totalPct >= 0 ? "+" : ""}${best.totalPct.toFixed(0)}% vs what you paid (confidence ${best.confidence}).`, swapTo: best.C.key });

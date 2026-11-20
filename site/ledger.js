@@ -191,26 +191,21 @@
     return `/tradedesk?left=${encodeURIComponent(left.key)}&right=${encodeURIComponent(right.key)}&ratio=${encodeURIComponent(Number(ratio.toPrecision(5)))}`;
   }
 
-  // ---------- view: cards or a simple list, each position expandable ----------
-  // "cards" opens every position; "list" shows one compact line per position. Either way a position can be opened or
-  // closed by clicking it, and what you opened stays open when prices refresh.
-  const VIEW_KEY = "poe2dd.ledgerView";
-  const view = { mode: (() => { try { return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "cards"; } catch { return "cards"; } })(), open: new Map() };
+  // ---------- list: one line per position, each expandable ----------
+  // A position opens or closes when clicked, and what you opened stays open when prices refresh.
+  const view = { mode: "list", open: new Map() };
+  let rowLabels = []; // column titles of the list being drawn; phones show them beside each number
   function collapsible(id, title, sub, result, resultCls, body, cols) {
-    const list = view.mode === "list" && cols;
-    const d = el("details", { class: list ? "lg-row" : "lg-pcard lg-coll" });
-    d.open = view.open.has(id) ? view.open.get(id) : view.mode === "cards";
+    const d = el("details", { class: "lg-row" });
+    d.open = view.open.has(id) ? view.open.get(id) : false;
     d.addEventListener("toggle", () => view.open.set(id, d.open));
-    let sum;
-    if (list) {
-      // A real list: one line per position with the numbers in columns, details open underneath when clicked.
-      sum = el("summary", { class: "lg-cols" }, el("span", { class: "lg-c-name" }, title));
-      sum.style.gridTemplateColumns = tracks(cols.map(c => !!c.node)); // set from script: the page policy blocks style attributes
-      for (const c of cols) sum.append(c.node ? el("span", { class: "lg-c lg-act" }, c.node) : el("span", { class: "lg-c " + (c.cls || "") }, c.t));
-    } else {
-      sum = el("summary", {}, el("span", { class: "lg-sum-t" }, title), el("span", { class: "lg-sum-m" }, sub));
-      if (result) sum.append(el("strong", { class: "lg-sum-r " + (resultCls || "") }, result));
-    }
+    // One line with the numbers in columns, details open underneath when clicked.
+    const sum = el("summary", { class: "lg-cols" }, el("span", { class: "lg-c-name" }, title));
+    sum.style.gridTemplateColumns = tracks(cols.map(c => !!c.node)); // set from script: the page policy blocks style attributes
+    cols.forEach((c, i) => {
+      if (c.node) sum.append(el("span", { class: "lg-c lg-act" }, c.node));
+      else { const s = el("span", { class: "lg-c " + (c.cls || "") }, c.t); if (rowLabels[i + 1]) s.setAttribute("data-label", rowLabels[i + 1]); sum.append(s); }
+    });
     d.append(sum, body);
     return d;
   }
@@ -220,15 +215,11 @@
   const listHead = (labels, acts) => {
     const h = el("div", { class: "lg-cols lg-head", "aria-hidden": "true" }, el("span", { class: "lg-c-name" }, labels[0]), ...labels.slice(1).map(t => el("span", { class: "lg-c" }, t)));
     h.style.gridTemplateColumns = tracks(acts);
+    rowLabels = labels;
     return h;
   };
-  function setView(mode) {
-    view.mode = mode; view.open.clear();
-    try { localStorage.setItem(VIEW_KEY, mode); } catch { /* kept for this page */ }
-    render();
-  }
   function setAll(open) {
-    document.querySelectorAll("#positions details, #closed details").forEach(d => { d.open = open; });
+    document.querySelectorAll("#positions details, #drops details, #drops-sold details, #closed details").forEach(d => { d.open = open; });
   }
 
   function positionCard(trade) {
@@ -319,7 +310,7 @@
     const rowSell = el("button", { type: "button", class: "xc-btn lg-rowbtn" }, "Sold");
     rowSell.addEventListener("click", e => { e.preventDefault(); e.stopPropagation(); sellDrop(drop, v); });
     return collapsible(`drop:${drop.id}`, `${fmt(drop.qty)} ${name}`, `found ${when(drop.ts)}`, v ? `${fmt(v.nowDivine)} div` : "", "lg-pos", body,
-      [{ t: `${fmt(drop.qty)} ${name}` }, { t: v ? `${fmt(v.nowDivine)} div` : "-" }, { t: v && v.premiumB !== null ? pct((v.premiumB - 1) * 100) : "-", cls: v && v.premiumB !== null ? tone(v.premiumB - 1) : "" }, { node: rowSell }]);
+      [{ t: v ? `${fmt(v.nowDivine)} div` : "-" }, { t: v && v.premiumB !== null ? pct((v.premiumB - 1) * 100) : "-", cls: v && v.premiumB !== null ? tone(v.premiumB - 1) : "" }, { node: rowSell }]);
   }
   const valueDropNow = drop => MM.valueDrop(drop, state.map, state.opts);
   function removeDrop(drop, title, text) {
@@ -343,20 +334,23 @@
   function renderDrops() {
     const open = state.drops.filter(d => !d.sold).sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
     const host = $("drops"); host.textContent = "";
-    host.classList.toggle("lg-table", view.mode === "list");
+    host.classList.add("lg-table");
     if (!open.length) host.append(el("p", { class: "lg-empty" }, "No drops yet. Add one above to start watching its price."));
-    else if (view.mode === "list") host.append(listHead(["Drop", "Worth now", "vs usual price", ""], [false, false, true]));
+    else host.append(listHead(["Drop", "Worth now", "vs usual price", ""], [false, false, true]));
     for (const d of open) host.append(dropCard(d));
     const sold = state.drops.filter(d => d.sold).sort((a, b) => Date.parse(b.sold.ts) - Date.parse(a.sold.ts));
     const sh = $("drops-sold"); sh.textContent = "";
     if (!sold.length) { sh.append(el("p", { class: "lg-empty" }, "Nothing sold yet.")); return; }
+    sh.classList.add("lg-table");
+    sh.append(listHead(["Drop", "Sold", "Received"], [false, false]));
     let total = 0;
     for (const d of sold) {
       total += d.sold.divine;
       const del = el("button", { type: "button", class: "xc-btn lg-danger" }, "Delete");
       del.addEventListener("click", () => { const go = () => removeDrop(d, "Sold drop deleted", `${fmt(d.qty)} ${nameOf(d.key)} was removed.`); if (confirmOn()) confirmBox("Delete this sold drop?", "It cannot be undone.", "Delete", go); else go(); });
       sh.append(collapsible(`dropsold:${d.id}`, `${fmt(d.qty)} ${nameOf(d.key)} \u2192 ${fmt(d.sold.divine)} div`, `sold ${when(d.sold.ts)}`, `+${fmt(d.sold.divine)} div`, "lg-pos",
-        el("div", { class: "lg-body" }, el("p", { class: "lg-meta" }, `Found ${when(d.ts)} \u00b7 sold ${when(d.sold.ts)}${d.note ? ` \u00b7 \u201c${d.note}\u201d` : ""}`), el("div", { class: "lg-btns" }, del))));
+        el("div", { class: "lg-body" }, el("p", { class: "lg-meta" }, `Found ${when(d.ts)} \u00b7 sold ${when(d.sold.ts)}${d.note ? ` \u00b7 \u201c${d.note}\u201d` : ""}`), el("div", { class: "lg-btns" }, del)),
+        [{ t: when(d.sold.ts) }, { t: `+${fmt(d.sold.divine)} div`, cls: "lg-pos" }]));
     }
     sh.prepend(el("p", { class: "lg-meta" }, `Earned from sold drops: ${fmt(total)} Divine.`));
   }
@@ -380,8 +374,8 @@
     const host = $("closed"); host.textContent = "";
     const list = state.trades.filter(t => t.closed).sort((a, b) => Date.parse(b.closed.ts) - Date.parse(a.closed.ts));
     if (!list.length) { host.append(el("p", { class: "lg-empty" }, "Nothing closed yet.")); return; }
-    host.classList.toggle("lg-table", view.mode === "list");
-    if (view.mode === "list") host.append(listHead(["Position", "Paid", "Closed", "Result", ""], [false, false, false, true]));
+    host.classList.add("lg-table");
+    host.append(listHead(["Position", "Paid", "Closed", "Result", ""], [false, false, false, true]));
     for (const t of list) {
       const real = (t.closed.qty / t.give.qty - 1) * 100;
       const del = el("button", { type: "button", class: "xc-btn lg-danger" }, "Delete");
@@ -428,8 +422,8 @@
     const open = state.trades.filter(t => !t.closed).sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts));
     const host = $("positions"); host.textContent = "";
     if (!open.length) host.append(el("p", { class: "lg-empty" }, "No open positions. Log a trade above to start tracking it."));
-    host.classList.toggle("lg-table", view.mode === "list");
-    if (open.length && view.mode === "list") host.append(listHead(["Position", "Paid", "Worth now", "Result", "After spread", ""], [false, false, false, false, true]));
+    host.classList.add("lg-table");
+    if (open.length) host.append(listHead(["Position", "Paid", "Worth now", "Result", "After spread", ""], [false, false, false, false, true]));
     for (const t of open) host.append(positionCard(t));
     renderSummary(); renderDrops(); renderClosed(); renderAlerts();
   }
@@ -467,9 +461,6 @@
     });
   }
 
-  function paintViewButtons() {
-    document.querySelectorAll("#lg-view [data-view]").forEach(b => b.classList.toggle("on", b.dataset.view === view.mode));
-  }
   const confirmBoxEl = $("lg-confirm");
   if (confirmBoxEl) {
     try { confirmBoxEl.checked = localStorage.getItem(CONFIRM_KEY) !== "0"; } catch { /* default: on */ }
@@ -479,10 +470,8 @@
   if (bar) {
     bar.addEventListener("click", e => {
       const b = e.target.closest("button"); if (!b) return;
-      if (b.dataset.view) { setView(b.dataset.view); paintViewButtons(); }
-      else if (b.dataset.all) setAll(b.dataset.all === "open");
+      if (b.dataset.all) setAll(b.dataset.all === "open");
     });
-    paintViewButtons();
   }
 
   // ---------- start ----------

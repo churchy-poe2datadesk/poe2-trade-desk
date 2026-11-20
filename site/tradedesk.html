@@ -133,6 +133,13 @@
       </div>
     </div>
 
+    <div class="xc-round" role="group" aria-label="Round amounts to whole numbers">
+      <span class="xc-label">Whole numbers</span>
+      <button id="rnd-off" class="xc-btn" type="button" aria-pressed="true">Off</button>
+      <button id="rnd-down" class="xc-btn" type="button" aria-pressed="false">Round down</button>
+      <button id="rnd-up" class="xc-btn" type="button" aria-pressed="false">Round up</button>
+    </div>
+    <p class="xc-note xc-round-note">The exchange only takes whole numbers. Round down or up snaps both amounts to whole numbers now, and keeps every amount that gets filled in from a ratio, margin or swap whole. The margin shows what the rounding costs or earns.</p>
     <label class="xc-free"><input type="checkbox" id="free-entry" checked> Type both amounts myself (the other side is not filled in for me, so whole numbers can go on both sides)</label>
     <p id="xc-line" class="xc-line"></p>
     <div id="xc-market" class="xc-market"><span id="xc-market-text"></span> <button id="use-market" class="xc-link" type="button">Use market ratio</button></div>

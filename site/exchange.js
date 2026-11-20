@@ -22,6 +22,12 @@ function parseDec(text) {
   return frac(BigInt(whole + decimals), 10n ** BigInt(decimals.length));
 }
 
+// Rounds a positive amount to a whole number, "down" (never below 1) or "up". Exact, since amounts are fractions.
+function wholeOf(a, dir) {
+  const floor = a.n / a.d, up = floor + (a.n % a.d ? 1n : 0n);
+  return String(dir === "up" ? (up < 1n ? 1n : up) : (floor < 1n ? 1n : floor));
+}
+
 function fmt(a, maxDp = 4) {
   const neg = a.n < 0n, n = neg ? -a.n : a.n;
   const scale = 10n ** BigInt(maxDp);
@@ -177,8 +183,25 @@ if (typeof document !== "undefined") {
     if (!l || !r || l.n <= 0n || r.n <= 0n) return null;
     return Number(r.n) / Number(r.d) / (Number(l.n) / Number(l.d));
   };
-  function fromLeft() { const l = readQty("left-qty"), r = readRatio(); if (l && r) $("right-qty").value = plain(mul(l, r)); summary(); }
-  function fromRight() { const rt = readQty("right-qty"), r = readRatio(); if (rt && r) $("left-qty").value = plain(div(rt, r)); summary(); }
+  // "Whole numbers": the exchange only takes whole amounts, so a filled-in amount can be rounded down or up to one.
+  const ROUND_KEY = "poe2dd.round";
+  let roundMode = "off"; try { const m = localStorage.getItem(ROUND_KEY); if (m === "down" || m === "up") roundMode = m; } catch { /* default: off */ }
+  const filled = f => (roundMode === "off" ? plain(f) : wholeOf(f, roundMode));
+  function fromLeft() { const l = readQty("left-qty"), r = readRatio(); if (l && r) $("right-qty").value = filled(mul(l, r)); summary(); }
+  function fromRight() { const rt = readQty("right-qty"), r = readRatio(); if (rt && r) $("left-qty").value = filled(div(rt, r)); summary(); }
+  function paintRound() {
+    for (const m of ["off", "down", "up"]) { const b = $("rnd-" + m); b.classList.toggle("active", roundMode === m); b.setAttribute("aria-pressed", String(roundMode === m)); }
+  }
+  function setRound(mode) {
+    roundMode = mode; paintRound();
+    try { localStorage.setItem(ROUND_KEY, mode); } catch { /* kept for this page */ }
+    if (mode !== "off") { // snap the amounts now: the left one to a whole number, the right one worked out from the ratio and rounded the same way
+      const l = readQty("left-qty");
+      if (l && l.n > 0n) $("left-qty").value = wholeOf(l, mode);
+      fromLeft();
+    }
+    summary();
+  }
   function onRatio() { showResult("", ""); fromLeft(); }
   function setItemMode(on, quiet) {
     state.itemMode = !!on;
@@ -554,6 +577,8 @@ if (typeof document !== "undefined") {
     if (!settingsState) return;
     window.ToolsUI.openSettings(settingsState, values => { if (window.Ledger) window.Ledger.applySettings(settingsState, values); opts = MM.optionsFrom(values); state.items.forEach(i => { delete i._spike; }); renderIdeas(); });
   });
+  for (const m of ["off", "down", "up"]) $("rnd-" + m).addEventListener("click", () => setRound(m));
+  paintRound();
   $("mode-cur").addEventListener("click", () => { if (state.itemMode) setItemMode(false); });
   $("mode-item").addEventListener("click", () => { if (!state.itemMode) setItemMode(true); });
   try { $("free-entry").checked = localStorage.getItem(FREE_KEY) !== "0"; } catch { /* default: on */ }
@@ -606,4 +631,4 @@ if (typeof document !== "undefined") {
   boot();
 }
 
-if (typeof module !== "undefined") module.exports = { parseDec, frac, mul, div, fmt, raise, reducedPair };
+if (typeof module !== "undefined") module.exports = { parseDec, frac, mul, div, fmt, raise, reducedPair, wholeOf };

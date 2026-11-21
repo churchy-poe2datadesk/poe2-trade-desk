@@ -187,6 +187,7 @@ h3{font:600 12px Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;
   .xc-cols[data-tab="calc"]:not([class*="xc-only"]) #col-ledger{display:none}
   .xc-col-h{font-size:20px}
   .xc-col .xc-card{padding:14px}
+  .xc-col .xc-row{grid-template-columns:minmax(0,1fr)}
 }
 :fullscreen body,body:fullscreen{background:var(--bg)}
 @media (max-width:760px){
